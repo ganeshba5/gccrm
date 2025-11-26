@@ -1,0 +1,73 @@
+# Firestore Security Rules
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        ('admin' in request.auth.token.roles);
+    }
+    
+    function isSalesRep() {
+      return isAuthenticated() && 
+        ('sales' in request.auth.token.roles);
+    }
+    
+    function isOwner(data) {
+      return isAuthenticated() && 
+        data.owner == request.auth.uid;
+    }
+    
+    function isValidLead() {
+      let incomingData = request.resource.data;
+      return incomingData.size() <= 10 && // Limit fields
+        incomingData.name is string && 
+        incomingData.name.size() > 0 && 
+        incomingData.name.size() <= 100 &&
+        (incomingData.company == null || 
+          (incomingData.company is string && 
+           incomingData.company.size() <= 100)) &&
+        (incomingData.email == null || 
+          (incomingData.email is string && 
+           incomingData.email.matches('^[^@]+@[^@]+\\.[^@]+$'))) &&
+        incomingData.status in ['New', 'Contacted', 'Qualified', 'Converted'] &&
+        incomingData.owner is string;
+    }
+
+    // Roles collection
+    match /roles/{userId} {
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+    
+    // Leads collection
+    match /leads/{leadId} {
+      // Read rules
+      allow read: if isAuthenticated() && 
+        (isAdmin() || isSalesRep());
+      
+      // Create rules
+      allow create: if isAuthenticated() && 
+        (isAdmin() || isSalesRep()) &&
+        isValidLead() &&
+        request.resource.data.created_at == request.time.toISOString().split('T')[0];
+      
+      // Update rules
+      allow update: if isAuthenticated() &&
+        (isAdmin() || (isSalesRep() && isOwner(resource.data))) &&
+        isValidLead() &&
+        request.resource.data.created_at == resource.data.created_at;
+      
+      // Delete rules
+      allow delete: if isAuthenticated() &&
+        (isAdmin() || (isSalesRep() && isOwner(resource.data)));
+    }
+  }
+}
