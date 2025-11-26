@@ -5,7 +5,8 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   sendEmailVerification,
-  onAuthStateChanged
+  onAuthStateChanged,
+  reload
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
@@ -14,6 +15,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null; needsEmailVerification: boolean; }>;
   signOut: () => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
   loading: boolean;
 };
 
@@ -91,11 +93,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resendVerificationEmail = async () => {
+    if (!user) {
+      throw new Error('No user is currently signed in');
+    }
+    if (user.emailVerified) {
+      throw new Error('Email is already verified');
+    }
+    try {
+      await sendEmailVerification(user);
+      console.log('Verification email sent');
+    } catch (error) {
+      console.error('Failed to send verification email:', error);
+      throw error instanceof Error ? error : new Error('Failed to send verification email');
+    }
+  };
+
   const value = {
     user,
     signIn,
     signUp,
     signOut,
+    resendVerificationEmail,
     loading,
   };
 

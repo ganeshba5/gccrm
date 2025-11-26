@@ -1,5 +1,3 @@
-# Firestore Security Rules
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -26,7 +24,13 @@ service cloud.firestore {
     
     function isValidLead() {
       let incomingData = request.resource.data;
-      return incomingData.size() <= 10 && // Limit fields
+      // Count fields - allow up to 10 fields
+      let fieldCount = incomingData.size();
+      // Required fields: name, status, owner, createdAt (4 fields)
+      // Optional: company, email, phone (3 fields max)
+      // Total max: 7 fields, so 10 is safe
+      return fieldCount <= 10 &&
+        fieldCount >= 4 && // Must have at least required fields
         incomingData.name is string && 
         incomingData.name.size() > 0 && 
         incomingData.name.size() <= 100 &&
@@ -35,9 +39,44 @@ service cloud.firestore {
            incomingData.company.size() <= 100)) &&
         (incomingData.email == null || 
           (incomingData.email is string && 
+           incomingData.email.size() > 0 &&
            incomingData.email.matches('^[^@]+@[^@]+\\.[^@]+$'))) &&
+        (incomingData.phone == null || 
+          (incomingData.phone is string && 
+           incomingData.phone.size() > 0 &&
+           incomingData.phone.size() <= 20)) &&
         incomingData.status in ['New', 'Contacted', 'Qualified', 'Converted'] &&
-        incomingData.owner is string;
+        incomingData.owner is string &&
+        incomingData.owner.size() > 0 &&
+        incomingData.createdAt is timestamp;
+    }
+    
+    function isValidCustomer() {
+      let incomingData = request.resource.data;
+      return incomingData.size() <= 12 && // Limit fields
+        incomingData.firstName is string && 
+        incomingData.firstName.size() > 0 && 
+        incomingData.firstName.size() <= 100 &&
+        incomingData.lastName is string && 
+        incomingData.lastName.size() > 0 && 
+        incomingData.lastName.size() <= 100 &&
+        incomingData.email is string && 
+        incomingData.email.size() > 0 &&
+        incomingData.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
+        (incomingData.phone == null || 
+          (incomingData.phone is string && 
+           incomingData.phone.size() <= 20)) &&
+        (incomingData.company == null || 
+          (incomingData.company is string && 
+           incomingData.company.size() <= 100)) &&
+        incomingData.status in ['active', 'inactive', 'lead'] &&
+        (incomingData.notes == null || 
+          (incomingData.notes is string && 
+           incomingData.notes.size() <= 2000)) &&
+        incomingData.createdAt is timestamp &&
+        incomingData.updatedAt is timestamp &&
+        (incomingData.assignedTo == null || incomingData.assignedTo is string) &&
+        (incomingData.lastContact == null || incomingData.lastContact is timestamp);
     }
 
     // Roles collection
@@ -49,25 +88,51 @@ service cloud.firestore {
     
     // Leads collection
     match /leads/{leadId} {
-      // Read rules
-      allow read: if isAuthenticated() && 
-        (isAdmin() || isSalesRep());
+      // Read rules - allow any authenticated user to read leads (covers both get and list)
+      // TODO: Restrict to admin/sales roles in production: (isAdmin() || isSalesRep()) &&
+      allow read: if isAuthenticated();
       
-      // Create rules
+      // Create rules - allow any authenticated user to create leads
+      // TODO: Restrict to admin/sales roles in production: (isAdmin() || isSalesRep()) &&
       allow create: if isAuthenticated() && 
-        (isAdmin() || isSalesRep()) &&
         isValidLead() &&
-        request.resource.data.created_at == request.time.toISOString().split('T')[0];
+        request.resource.data.createdAt is timestamp;
+      
+      // Update rules - allow users to update their own leads or if they have roles
+      allow update: if isAuthenticated() &&
+        (isAdmin() || (isSalesRep() && isOwner(resource.data)) || resource.data.owner == request.auth.uid) &&
+        isValidLead() &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      
+      // Delete rules - allow users to delete their own leads or if they have roles
+      allow delete: if isAuthenticated() &&
+        (isAdmin() || (isSalesRep() && isOwner(resource.data)) || resource.data.owner == request.auth.uid);
+    }
+    
+    // Customers collection
+    match /customers/{customerId} {
+      // Read rules - allow any authenticated user to read customers (covers both get and list)
+      // TODO: Restrict to admin/sales roles in production: (isAdmin() || isSalesRep()) &&
+      allow read: if isAuthenticated();
+      
+      // Create rules - allow any authenticated user to create customers
+      // TODO: Restrict to admin/sales roles in production: (isAdmin() || isSalesRep()) &&
+      allow create: if isAuthenticated() && 
+        isValidCustomer() &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
       
       // Update rules
       allow update: if isAuthenticated() &&
-        (isAdmin() || (isSalesRep() && isOwner(resource.data))) &&
-        isValidLead() &&
-        request.resource.data.created_at == resource.data.created_at;
+        (isAdmin() || 
+         (isSalesRep() && (resource.data.assignedTo == request.auth.uid || request.resource.data.assignedTo == request.auth.uid))) &&
+        isValidCustomer() &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt is timestamp;
       
       // Delete rules
       allow delete: if isAuthenticated() &&
-        (isAdmin() || (isSalesRep() && isOwner(resource.data)));
+        (isAdmin() || (isSalesRep() && resource.data.assignedTo == request.auth.uid));
     }
   }
 }

@@ -27,7 +27,9 @@ export default function LeadTable({ leads, onSelectLead }: { leads: Lead[]; onSe
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{lead.status}</span>
               </td>
               <td className="px-3 py-3 text-sm text-gray-700">{lead.owner}</td>
-              <td className="px-3 py-3 text-sm text-gray-500">{lead.created_at}</td>
+              <td className="px-3 py-3 text-sm text-gray-500">
+                {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}
+              </td>
               <td className="px-3 py-3 text-sm text-right">
                 <button className="text-sm text-indigo-600 hover:underline">Edit</button>
               </td>

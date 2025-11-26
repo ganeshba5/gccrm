@@ -6,7 +6,7 @@ export type Lead = {
   phone?: string;
   status?: 'New' | 'Contacted' | 'Qualified' | 'Converted';
   owner?: string;
-  created_at?: string;
+  createdAt: Date;
 };
 
 // no default export; use named imports for types

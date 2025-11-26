@@ -70,8 +70,12 @@ try {
 // Initialize Firestore
 let db;
 try {
+  // Initialize Firestore with the same app instance
+  // Firestore automatically uses the auth from the same app
   db = getFirestore(app);
   console.log('Firestore initialized successfully');
+  console.log('Firestore database:', db.app.name);
+  console.log('Firestore will use auth from the same app instance');
 } catch (error) {
   console.error('Error initializing Firestore:', error);
   throw error;
