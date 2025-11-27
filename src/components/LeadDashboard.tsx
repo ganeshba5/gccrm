@@ -3,7 +3,6 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { auth } from '../lib/firebase';
 import LeadTable from './LeadTable';
 import LeadProfilePanel from './LeadProfilePanel';
-import LeadFilters from './LeadFilters';
 import AddLeadModal from './AddLeadModal';
 import EmailVerificationBanner from './EmailVerificationBanner';
 import { useAuth } from '../context/AuthContext';
@@ -141,57 +140,77 @@ export default function LeadDashboard() {
   }, [user, authLoading]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <EmailVerificationBanner />
-        <header className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-800">Leads</h1>
-            <p className="text-sm text-gray-500">Manage and convert your leads</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsAddOpen(true)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-indigo-700"
-            >
-              + New Lead
-            </button>
-          </div>
-        </header>
+    <div className="p-6 space-y-6">
+      <EmailVerificationBanner />
+      
+      {/* Page Title */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-3">
+          <span className="text-4xl">👥</span>
+          <h1 className="text-3xl font-bold text-gray-900">Leads</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg shadow-theme-sm transition-colors font-medium text-sm"
+          >
+            + New Lead
+          </button>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <LeadFilters />
-              <LeadTable leads={leads} onSelectLead={setSelectedLead} />
-            </div>
+      {/* Filters and View Options */}
+      <div className="mb-4 space-y-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <select className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700">
+            <option>All Status</option>
+            <option>New</option>
+            <option>Contacted</option>
+            <option>Qualified</option>
+            <option>Converted</option>
+          </select>
+          <select className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700">
+            <option>All Owners</option>
+          </select>
+          <select className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700">
+            <option>All statuses</option>
+            <option>New</option>
+            <option>Contacted</option>
+            <option>Qualified</option>
+            <option>Converted</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Owner"
+            className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Filters are client-side placeholders</p>
+          <div className="flex items-center space-x-2">
+            <input type="checkbox" className="w-4 h-4 text-brand-500 border-gray-300 rounded focus:ring-brand-500" />
+            <span className="text-sm text-gray-700 dark:text-gray-300">{leads.length} results</span>
           </div>
+        </div>
+      </div>
 
-          <aside className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Overview</h3>
-              <div className="space-y-2">
-                <div className="text-sm text-gray-600">Total leads: {leads.length}</div>
-                <div className="text-sm text-gray-600">New: {leads.filter(l => l.status === 'New').length}</div>
-                <div className="text-sm text-gray-600">Contacted: {leads.filter(l => l.status === 'Contacted').length}</div>
-              </div>
-            </div>
-          </aside>
+        {/* Main Content Table */}
+        <div>
+          <LeadTable leads={leads} onSelectLead={setSelectedLead} />
         </div>
 
-        <LeadProfilePanel lead={selectedLead} onClose={() => setSelectedLead(null)} />
-        <AddLeadModal
-          open={isAddOpen}
-          onClose={() => setIsAddOpen(false)}
-          onCreate={async () => { 
-            // Small delay to ensure Firestore has processed the write
-            setTimeout(async () => {
-              await refreshLeads(); 
-            }, 500);
-            setIsAddOpen(false); 
-          }}
-        />
-      </div>
+      <LeadProfilePanel lead={selectedLead} onClose={() => setSelectedLead(null)} />
+      <AddLeadModal
+        open={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        onCreate={async () => { 
+          // Small delay to ensure Firestore has processed the write
+          setTimeout(async () => {
+            await refreshLeads(); 
+          }, 500);
+          setIsAddOpen(false); 
+        }}
+      />
     </div>
   );
 }

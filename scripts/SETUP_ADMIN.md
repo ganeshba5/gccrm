@@ -6,12 +6,21 @@ The scripts use Firebase Admin SDK which bypasses security rules and is perfect 
 
 ### Step 1: Get Service Account Key
 
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Select your project: `device-streaming-45f887fb`
-3. Click the gear icon ⚙️ > **Project Settings**
-4. Go to **Service Accounts** tab
-5. Click **Generate new private key**
-6. Save the downloaded JSON file as `scripts/serviceAccountKey.json`
+**IMPORTANT:** The service account key must be for the **same project** as your web app!
+
+1. Check your project ID in `.env`:
+   ```bash
+   grep VITE_FIREBASE_PROJECT_ID .env
+   ```
+
+2. Go to [Firebase Console](https://console.firebase.google.com/)
+3. Select your project (should match `VITE_FIREBASE_PROJECT_ID` from `.env`)
+4. Click the gear icon ⚙️ > **Project Settings**
+5. Go to **Service Accounts** tab
+6. Click **Generate new private key**
+7. Save the downloaded JSON file as `scripts/serviceAccountKey.json`
+
+**Note:** If you see a warning about project ID mismatch when running scripts, your service account key is for a different project than your `.env` file. Download a new key for the correct project.
 
 ### Step 2: Add to .gitignore
 
@@ -58,6 +67,13 @@ Instead of placing the file in `scripts/`, you can:
 ### "Permission denied" (still)
 
 - Make sure you're using `firebase-admin.js` (not `firebase-node.js`)
-- Verify the service account key is for the correct project
+- Verify the service account key is for the correct project (check the warning message when running scripts)
 - Check that `firebase-admin` package is installed: `npm list firebase-admin`
+
+### "Project ID mismatch" warning
+
+If you see a warning about project ID mismatch:
+- Your service account key is for a different project than your `.env` file
+- Download a new service account key from the Firebase Console for the project specified in `VITE_FIREBASE_PROJECT_ID`
+- Replace `scripts/serviceAccountKey.json` with the new key
 
