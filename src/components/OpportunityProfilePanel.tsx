@@ -3,7 +3,13 @@ import type { Opportunity } from '../types/opportunity';
 import { accountService } from '../services/accountService';
 import type { Account } from '../types/account';
 
-export default function OpportunityProfilePanel({ opportunity, onClose }: { opportunity: Opportunity | null; onClose: () => void }) {
+interface OpportunityProfilePanelProps {
+  opportunity: Opportunity | null;
+  onClose: () => void;
+  userNames?: Map<string, string>; // Map of userId -> user display name
+}
+
+export default function OpportunityProfilePanel({ opportunity, onClose, userNames }: OpportunityProfilePanelProps) {
   const [accountName, setAccountName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -89,7 +95,9 @@ export default function OpportunityProfilePanel({ opportunity, onClose }: { oppo
           )}
           <div>
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Owner</span>
-            <div className="text-sm text-gray-900 dark:text-white">{opportunity.owner}</div>
+            <div className="text-sm text-gray-900 dark:text-white">
+              {userNames?.get(opportunity.owner) || opportunity.owner}
+            </div>
           </div>
           <div>
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Created</span>

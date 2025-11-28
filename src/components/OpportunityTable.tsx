@@ -42,17 +42,17 @@ export default function OpportunityTable({ opportunities, accountNames, userName
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse">
         <thead>
-          {/* Header Row 1: Name, Account, Amount, Stage */}
+          {/* Header Row 1: Name, Close Date, Amount, Stage */}
           <tr className="border-b border-gray-200 dark:border-gray-800">
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Name</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Account</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 w-[40%]">Name</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Close Date</th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Amount</th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Stage</th>
           </tr>
-          {/* Header Row 2: Probability, Close Date, Owned By, Actions */}
+          {/* Header Row 2: Account, Probability, Owned By, Actions */}
           <tr className="border-b border-gray-200 dark:border-gray-800">
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 w-[40%]">Account</th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Probability</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Close Date</th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Owned By</th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Actions</th>
           </tr>
@@ -60,9 +60,9 @@ export default function OpportunityTable({ opportunities, accountNames, userName
         <tbody>
           {opportunities.map(opportunity => (
             <>
-              {/* Row 1: Name, Account, Amount, Stage */}
+              {/* Row 1: Name, Close Date, Amount, Stage */}
               <tr key={`${opportunity.id}-1`} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5">
-                <td className="px-4 py-2 text-sm text-left">
+                <td className="px-4 py-2 text-sm text-left w-[40%]">
                   <button 
                     onClick={() => onSelectOpportunity(opportunity)} 
                     className="text-brand-500 hover:text-brand-600 hover:underline font-medium dark:text-brand-400 text-left"
@@ -70,8 +70,8 @@ export default function OpportunityTable({ opportunities, accountNames, userName
                     {opportunity.name}
                   </button>
                 </td>
-                <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left">
-                  {opportunity.accountId ? (accountNames.get(opportunity.accountId) || opportunity.accountId) : '-'}
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-left">
+                  {formatDate(opportunity.expectedCloseDate)}
                 </td>
                 <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left">{formatCurrency(opportunity.amount)}</td>
                 <td className="px-4 py-2 text-sm text-left">
@@ -80,12 +80,12 @@ export default function OpportunityTable({ opportunities, accountNames, userName
                   </span>
                 </td>
               </tr>
-              {/* Row 2: Probability, Close Date, Owned By, Actions */}
+              {/* Row 2: Account, Probability, Owned By, Actions */}
               <tr key={`${opportunity.id}-2`} className="border-b-2 border-gray-400 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-white/5">
-                <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left">{opportunity.probability ? `${opportunity.probability}%` : '-'}</td>
-                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-left">
-                  {formatDate(opportunity.expectedCloseDate)}
+                <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left w-[40%]">
+                  {opportunity.accountId ? (accountNames.get(opportunity.accountId) || opportunity.accountId) : '-'}
                 </td>
+                <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left">{opportunity.probability ? `${opportunity.probability}%` : '-'}</td>
                 <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left">
                   {userNames.get(opportunity.owner) || opportunity.owner}
                 </td>

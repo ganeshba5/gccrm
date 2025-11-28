@@ -431,7 +431,11 @@ export default function OpportunityDashboard() {
         />
       </div>
 
-      <OpportunityProfilePanel opportunity={selectedOpportunity} onClose={() => setSelectedOpportunity(null)} />
+      <OpportunityProfilePanel 
+        opportunity={selectedOpportunity} 
+        onClose={() => setSelectedOpportunity(null)}
+        userNames={userNames}
+      />
       <AddOpportunityModal
         open={isAddOpen}
         onClose={() => setIsAddOpen(false)}
