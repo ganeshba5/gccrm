@@ -5,13 +5,25 @@ import DashboardLayout from './components/DashboardLayout';
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import Dashboard from './components/Dashboard';
-import LeadDashboard from './components/LeadDashboard';
+import OpportunityDashboard from './components/OpportunityDashboard';
 import ContactsPage from './components/ContactsPage';
 import TasksPage from './components/TasksPage';
 import NotesPage from './components/NotesPage';
 import SettingsPage from './components/SettingsPage';
+import { AccountList } from './components/AccountList';
+import { AccountForm } from './components/AccountForm';
+import { ContactList } from './components/ContactList';
+import { ContactForm } from './components/ContactForm';
+import { TaskList } from './components/TaskList';
+import { TaskForm } from './components/TaskForm';
+import { NoteList } from './components/NoteList';
+import { NoteForm } from './components/NoteForm';
+import { UserList } from './components/UserList';
+import { UserForm } from './components/UserForm';
 import { CustomerList } from './components/CustomerList';
 import { CustomerForm } from './components/CustomerForm';
+import { OpportunityNotesPage, AccountNotesPage, ContactNotesPage } from './components/EntityNotesPage';
+import { OpportunityTasksPage, AccountTasksPage, ContactTasksPage } from './components/EntityTasksPage';
 import './App.css';
 
 export default function App() {
@@ -34,12 +46,44 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Opportunity routes - specific routes must come before general ones */}
+          <Route
+            path="/opportunities/:id/notes"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <OpportunityNotesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/opportunities/:id/tasks"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <OpportunityTasksPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/opportunities"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <OpportunityDashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          {/* Legacy route for backward compatibility */}
           <Route
             path="/leads"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <LeadDashboard />
+                  <OpportunityDashboard />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -49,7 +93,47 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <ContactsPage />
+                  <ContactList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts/new"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ContactForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts/:id/edit"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ContactForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts/:id/notes"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ContactNotesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts/:id/tasks"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ContactTasksPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -59,7 +143,27 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <TasksPage />
+                  <TaskList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tasks/new"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TaskForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tasks/:id/edit"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <TaskForm />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -69,7 +173,27 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <NotesPage />
+                  <NoteList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notes/new"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <NoteForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notes/:id/edit"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <NoteForm />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -84,8 +208,100 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <UserList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users/new"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <UserForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users/:id/edit"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <UserForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
           
-          {/* Legacy Customer Routes */}
+          {/* Accounts Routes */}
+          <Route
+            path="/accounts"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AccountList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/accounts/new"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AccountForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/accounts/:id/edit"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AccountForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/accounts/:id/view"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AccountForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/accounts/:id/notes"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AccountNotesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/accounts/:id/tasks"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <AccountTasksPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Legacy Customer Routes (for backward compatibility) */}
           <Route
             path="/customers"
             element={

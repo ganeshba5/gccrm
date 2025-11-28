@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { auth } from '../lib/firebase';
 import LeadTable from './LeadTable';
 import LeadProfilePanel from './LeadProfilePanel';
 import AddLeadModal from './AddLeadModal';
-import EmailVerificationBanner from './EmailVerificationBanner';
+import EditLeadModal from './EditLeadModal';
 import { useAuth } from '../context/AuthContext';
 import type { Lead } from '../types';
 import { db } from '../lib/firebase';
@@ -18,6 +18,8 @@ export default function LeadDashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
   const { user, loading: authLoading } = useAuth();
 
   const fetchLeads = async () => {
@@ -112,6 +114,38 @@ export default function LeadDashboard() {
     await fetchLeads();
   };
 
+  const handleEdit = (lead: Lead) => {
+    setLeadToEdit(lead);
+    setIsEditOpen(true);
+  };
+
+  const handleDelete = async (lead: Lead) => {
+    try {
+      if (!lead.id) {
+        console.error('Lead has no ID');
+        return;
+      }
+
+      const leadRef = doc(db, 'leads', lead.id);
+      await deleteDoc(leadRef);
+      
+      // Refresh the leads list
+      await refreshLeads();
+    } catch (err: any) {
+      console.error('Failed to delete lead:', err);
+      alert(`Failed to delete lead: ${err.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleEditUpdate = async () => {
+    // Small delay to ensure Firestore has processed the update
+    setTimeout(async () => {
+      await refreshLeads();
+    }, 500);
+    setIsEditOpen(false);
+    setLeadToEdit(null);
+  };
+
   useEffect(() => {
     // Wait for auth to be ready before fetching leads
     if (authLoading) {
@@ -141,7 +175,6 @@ export default function LeadDashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <EmailVerificationBanner />
       
       {/* Page Title */}
       <div className="flex items-center justify-between mb-6">
@@ -196,7 +229,12 @@ export default function LeadDashboard() {
 
         {/* Main Content Table */}
         <div>
-          <LeadTable leads={leads} onSelectLead={setSelectedLead} />
+          <LeadTable 
+            leads={leads} 
+            onSelectLead={setSelectedLead}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
         </div>
 
       <LeadProfilePanel lead={selectedLead} onClose={() => setSelectedLead(null)} />
@@ -210,6 +248,15 @@ export default function LeadDashboard() {
           }, 500);
           setIsAddOpen(false); 
         }}
+      />
+      <EditLeadModal
+        open={isEditOpen}
+        onClose={() => {
+          setIsEditOpen(false);
+          setLeadToEdit(null);
+        }}
+        onUpdate={handleEditUpdate}
+        lead={leadToEdit}
       />
     </div>
   );

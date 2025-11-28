@@ -1,6 +1,6 @@
 {
   "projects": {
-    "gccrm": "device-streaming-45f887fb"
+    "default": "gccrmapp"
   },
   "targets": {},
   "etags": {}

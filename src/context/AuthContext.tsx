@@ -1,14 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import type { User } from 'firebase/auth';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendEmailVerification,
-  onAuthStateChanged,
-  reload
-} from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import type { User } from '../types/user';
+import { authService } from '../services/authService';
 
 type AuthContextType = {
   user: User | null;
@@ -26,35 +18,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Setting up auth state change listener');
-    // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user ? 'User logged in' : 'No user');
-      if (user) {
+    console.log('Setting up auth state listener');
+    // Check for existing session on mount
+    checkAuthState();
+    
+    // Check auth state periodically (every 5 minutes)
+    const interval = setInterval(() => {
+      checkAuthState();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const checkAuthState = async () => {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      console.log('Auth state checked:', currentUser ? 'User logged in' : 'No user');
+      if (currentUser) {
         console.log('User details:', {
-          uid: user.uid,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          isAnonymous: user.isAnonymous,
-          providerData: user.providerData
+          id: currentUser.id,
+          email: currentUser.email,
+          role: currentUser.role,
+          isActive: currentUser.isActive,
         });
       }
-      setUser(user);
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Error checking auth state:', error);
+      setUser(null);
+    } finally {
       setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     console.log('Attempting to sign in with email:', email);
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const authenticatedUser = await authService.signIn(email, password);
       console.log('Sign in successful:', {
-        uid: result.user.uid,
-        email: result.user.email,
-        emailVerified: result.user.emailVerified
+        id: authenticatedUser.id,
+        email: authenticatedUser.email,
+        role: authenticatedUser.role,
       });
+      setUser(authenticatedUser);
     } catch (error) {
       console.error('Sign in failed:', error);
       throw error instanceof Error ? error : new Error('Failed to sign in');
@@ -64,14 +70,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string) => {
     console.log('Attempting to sign up with email:', email);
     try {
-      const { user } = await createUserWithEmailAndPassword(auth, email, password);
-      console.log('Sign up successful, sending email verification');
-      await sendEmailVerification(user);
-      console.log('Email verification sent');
+      // For now, sign up creates a user in Firestore
+      // In production, you might want admin approval
+      const { userService } = await import('../services/userService');
+      const { hashPassword } = authService;
+      
+      const hashedPassword = await hashPassword(password);
+      const userId = await userService.create({
+        email: email.toLowerCase().trim(),
+        role: 'user',
+        isActive: true,
+      });
+
+      // Set password (this would need to be done via a separate method or admin)
+      // For now, we'll need to update the user document with password
+      const { doc, updateDoc, Timestamp } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      await updateDoc(doc(db, 'users', userId), {
+        password: hashedPassword,
+        updatedAt: Timestamp.now(),
+      });
+
+      console.log('Sign up successful');
       
       return {
         error: null,
-        needsEmailVerification: true,
+        needsEmailVerification: false,
       };
     } catch (error) {
       console.error('Sign up failed:', error);
@@ -85,7 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     console.log('Attempting to sign out');
     try {
-      await firebaseSignOut(auth);
+      authService.signOut();
+      setUser(null);
       console.log('Sign out successful');
     } catch (error) {
       console.error('Sign out failed:', error);
@@ -94,19 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resendVerificationEmail = async () => {
-    if (!user) {
-      throw new Error('No user is currently signed in');
-    }
-    if (user.emailVerified) {
-      throw new Error('Email is already verified');
-    }
-    try {
-      await sendEmailVerification(user);
-      console.log('Verification email sent');
-    } catch (error) {
-      console.error('Failed to send verification email:', error);
-      throw error instanceof Error ? error : new Error('Failed to send verification email');
-    }
+    // Not applicable for application-level auth
+    throw new Error('Email verification is not used with application-level authentication');
   };
 
   const value = {

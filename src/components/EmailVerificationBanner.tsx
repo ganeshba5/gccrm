@@ -1,16 +1,11 @@
-import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function EmailVerificationBanner() {
-  const { user, resendVerificationEmail } = useAuth();
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  // Don't show if email is verified or no user
-  if (!user || user.emailVerified) {
-    return null;
-  }
+  // Email verification is not used with application-level authentication
+  // Always return null to hide this banner
+  return null;
 
   const handleResend = async () => {
     setSending(true);

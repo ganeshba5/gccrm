@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { UserProfileModal } from './UserProfileModal';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [searchValue, setSearchValue] = useState('');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -30,18 +32,40 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     setSearchValue('');
   };
 
-  const menuItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/leads', label: 'Leads', icon: '👥' },
-    { path: '/contacts', label: 'Contacts', icon: '📇' },
-    { path: '/tasks', label: 'Tasks', icon: '✅' },
-    { path: '/notes', label: 'Notes', icon: '📝' },
-    { path: '/settings', label: 'Settings', icon: '⚙️' },
+  const handleProfileUpdate = () => {
+    // Refresh the page to get updated user data
+    window.location.reload();
+  };
+
+  const allMenuItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: '📊', adminOnly: false },
+    { path: '/opportunities', label: 'Opportunities', icon: '💼', adminOnly: false },
+    { path: '/accounts', label: 'Accounts', icon: '🏢', adminOnly: false },
+    { path: '/contacts', label: 'Contacts', icon: '📇', adminOnly: false },
+    { path: '/tasks', label: 'Tasks', icon: '✅', adminOnly: false },
+    { path: '/notes', label: 'Notes', icon: '📝', adminOnly: false },
+    { path: '/users', label: 'Users', icon: '👤', adminOnly: true },
+    { path: '/settings', label: 'Settings', icon: '⚙️', adminOnly: false },
   ];
+
+  // Filter menu items based on user role
+  const menuItems = allMenuItems.filter(item => {
+    if (item.adminOnly) {
+      return user?.role === 'admin';
+    }
+    return true;
+  });
 
   const isActive = (path: string) => {
     if (path === '/dashboard') {
       return location.pathname === '/dashboard';
+    }
+    // Handle legacy routes
+    if (path === '/opportunities') {
+      return location.pathname.startsWith('/opportunities') || location.pathname.startsWith('/leads');
+    }
+    if (path === '/accounts') {
+      return location.pathname.startsWith('/accounts') || location.pathname.startsWith('/customers');
     }
     return location.pathname.startsWith(path);
   };
@@ -78,7 +102,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* User Info */}
           <div className="flex items-center gap-4 px-5 py-4 lg:px-0">
-            <span className="text-sm text-gray-700 dark:text-gray-300">{user?.email || 'User'}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                {user?.displayName || user?.email || 'User'}
+              </span>
+              <button
+                onClick={() => setIsProfileModalOpen(true)}
+                className="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+                title="Edit Profile"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            </div>
             <button
               onClick={handleSignOut}
               className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors"
@@ -118,6 +155,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        onUpdate={handleProfileUpdate}
+      />
     </div>
   );
 }

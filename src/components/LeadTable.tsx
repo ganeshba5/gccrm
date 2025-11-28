@@ -1,6 +1,13 @@
 import type { Lead } from '../types';
 
-export default function LeadTable({ leads, onSelectLead }: { leads: Lead[]; onSelectLead: (l: Lead) => void }) {
+interface LeadTableProps {
+  leads: Lead[];
+  onSelectLead: (l: Lead) => void;
+  onEdit: (l: Lead) => void;
+  onDelete: (l: Lead) => void;
+}
+
+export default function LeadTable({ leads, onSelectLead, onEdit, onDelete }: LeadTableProps) {
   const formatDate = (date: Date | undefined) => {
     if (!date) return '-';
     return new Date(date).toLocaleDateString('en-US', {
@@ -8,6 +15,18 @@ export default function LeadTable({ leads, onSelectLead }: { leads: Lead[]; onSe
       day: '2-digit',
       year: 'numeric'
     });
+  };
+
+  const handleEdit = (e: React.MouseEvent, lead: Lead) => {
+    e.stopPropagation();
+    onEdit(lead);
+  };
+
+  const handleDelete = (e: React.MouseEvent, lead: Lead) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete "${lead.name}"?`)) {
+      onDelete(lead);
+    }
   };
 
   return (
@@ -45,7 +64,26 @@ export default function LeadTable({ leads, onSelectLead }: { leads: Lead[]; onSe
                 {formatDate(lead.createdAt)}
               </td>
               <td className="px-4 py-3 text-sm">
-                <button className="text-brand-500 hover:text-brand-600 hover:underline dark:text-brand-400">Edit</button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => handleEdit(e, lead)}
+                    className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                    title="Edit"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(e, lead)}
+                    className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                    title="Delete"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

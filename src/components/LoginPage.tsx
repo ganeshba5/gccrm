@@ -1,14 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
+
+const LAST_LOGIN_EMAIL_KEY = 'gccrm_last_login_email';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
+
+  // Load saved email from localStorage on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem(LAST_LOGIN_EMAIL_KEY);
+    if (savedEmail) {
+      setEmail(savedEmail);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,6 +28,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signIn(email, password);
+      // Save email to localStorage on successful login
+      if (email) {
+        localStorage.setItem(LAST_LOGIN_EMAIL_KEY, email);
+      }
       navigate('/dashboard');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to sign in');
@@ -63,9 +79,18 @@ export default function LoginPage() {
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <input
                 id="password"
                 name="password"
@@ -101,6 +126,12 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+      />
     </div>
   );
 }
