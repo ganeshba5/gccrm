@@ -1,12 +1,6 @@
 export default function NotesPage() {
   return (
     <div className="p-6 space-y-6">
-      {/* Page Title */}
-      <div className="flex items-center space-x-3 mb-6">
-        <span className="text-4xl">📝</span>
-        <h1 className="text-3xl font-bold text-gray-900">Notes</h1>
-      </div>
-
       {/* Filters and View Options */}
       <div className="bg-gray-50 p-4 rounded-lg mb-4">
         <div className="flex items-center justify-between">

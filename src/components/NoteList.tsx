@@ -134,19 +134,6 @@ export function NoteList() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-3">
-          <span className="text-4xl">📝</span>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Notes</h1>
-        </div>
-        <button
-          className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg shadow-theme-sm transition-colors font-medium text-sm"
-          onClick={() => navigate('/notes/new')}
-        >
-          + New Note
-        </button>
-      </div>
-
       <div className="flex gap-3 mb-4">
         <select
           value={filterType}

@@ -13,6 +13,7 @@ export function AccountList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accountEditPermissions, setAccountEditPermissions] = useState<Map<string, boolean>>(new Map());
+  const [accountSearch, setAccountSearch] = useState<string>('');
 
   useEffect(() => {
     loadAccounts();
@@ -50,6 +51,10 @@ export function AccountList() {
     }
   };
 
+  const filteredAccounts = accounts.filter((account) =>
+    account.name.toLowerCase().includes(accountSearch.toLowerCase())
+  );
+
   if (loading) {
     return <div className="p-4">Loading accounts...</div>;
   }
@@ -70,17 +75,43 @@ export function AccountList() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-3">
-          <span className="text-4xl">🏢</span>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Accounts</h1>
+      {/* Account search combo box */}
+      <div className="max-w-xs">
+        <div className="relative">
+          <input
+            type="text"
+            value={accountSearch}
+            onChange={(e) => setAccountSearch(e.target.value)}
+            placeholder="Search Accounts"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+          />
+          {accountSearch && (
+            <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                onClick={() => setAccountSearch('')}
+              >
+                All Accounts
+              </button>
+              {accounts
+                .filter((account) =>
+                  account.name.toLowerCase().includes(accountSearch.toLowerCase())
+                )
+                .slice(0, 20)
+                .map((account) => (
+                  <button
+                    key={account.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    onClick={() => setAccountSearch(account.name)}
+                  >
+                    {account.name}
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
-        <button
-          className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg shadow-theme-sm transition-colors font-medium text-sm"
-          onClick={() => navigate('/accounts/new')}
-        >
-          + New Account
-        </button>
       </div>
 
       <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
@@ -95,14 +126,14 @@ export function AccountList() {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {accounts.map((account) => (
+            {filteredAccounts.map((account) => (
               <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white text-left">
                     {account.name}
                   </div>
                   {account.email && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{account.email}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 text-left">{account.email}</div>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">

@@ -56,12 +56,6 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Page Title */}
-      <div className="flex items-center space-x-3 mb-6">
-        <span className="text-4xl">📊</span>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-      </div>
-
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-sm p-6">

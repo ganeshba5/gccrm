@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import OpportunityTable from './OpportunityTable';
-import OpportunityProfilePanel from './OpportunityProfilePanel';
+// OpportunityProfilePanel removed - EditOpportunityModal is used instead
 import AddOpportunityModal from './AddOpportunityModal';
 import EditOpportunityModal from './EditOpportunityModal';
 import { useAuth } from '../context/AuthContext';
@@ -18,12 +18,13 @@ export default function OpportunityDashboard() {
   // const [users] = useState<any[]>([]); // Reserved for future use
   const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
   const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
-  const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+  // selectedOpportunity removed - using opportunityToEdit instead
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [opportunityToEdit, setOpportunityToEdit] = useState<Opportunity | null>(null);
   const [filterStage, setFilterStage] = useState<string>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
+  const [accountSearch, setAccountSearch] = useState<string>('');
   const [dateFilterType, setDateFilterType] = useState<string>('all'); // 'all', 'month', 'quarter', 'year', 'custom'
   const [dateFilterValue, setDateFilterValue] = useState<string>(''); // For month, quarter, year selections
   const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -273,22 +274,6 @@ export default function OpportunityDashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Page Title */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <span className="text-4xl">💼</span>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Opportunities</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg shadow-theme-sm transition-colors font-medium text-sm"
-          >
-            + New Opportunity
-          </button>
-        </div>
-      </div>
-
       {/* Filters and View Options */}
       <div className="mb-4 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
@@ -305,16 +290,56 @@ export default function OpportunityDashboard() {
             <option value="Closed Won">Closed Won</option>
             <option value="Closed Lost">Closed Lost</option>
           </select>
-          <select 
-            value={filterAccount}
-            onChange={(e) => setFilterAccount(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-          >
-            <option value="all">All Accounts</option>
-            {accounts.map(account => (
-              <option key={account.id} value={account.id}>{account.name}</option>
-            ))}
-          </select>
+          {/* Account combo box */}
+          <div className="relative">
+            <input
+              type="text"
+              value={accountSearch}
+              onChange={(e) => {
+                const value = e.target.value;
+                setAccountSearch(value);
+                // If exact match, set filterAccount, otherwise show all
+                const match = accounts.find(
+                  (account) => account.name.toLowerCase() === value.toLowerCase()
+                );
+                setFilterAccount(match ? match.id : 'all');
+              }}
+              placeholder="All Accounts"
+              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
+            />
+            {accountSearch && (
+              <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onClick={() => {
+                    setAccountSearch('');
+                    setFilterAccount('all');
+                  }}
+                >
+                  All Accounts
+                </button>
+                {accounts
+                  .filter((account) =>
+                    account.name.toLowerCase().includes(accountSearch.toLowerCase())
+                  )
+                  .slice(0, 20)
+                  .map((account) => (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      onClick={() => {
+                        setAccountSearch(account.name);
+                        setFilterAccount(account.id);
+                      }}
+                    >
+                      {account.name}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
           <select
             value={dateFilterType}
             onChange={(e) => {
@@ -402,6 +427,7 @@ export default function OpportunityDashboard() {
                 onClick={() => {
                   setFilterStage('all');
                   setFilterAccount('all');
+                  setAccountSearch('');
                   setDateFilterType('all');
                   setDateFilterValue('');
                   setCustomStartDate('');
@@ -425,17 +451,10 @@ export default function OpportunityDashboard() {
           opportunities={filteredOpportunities} 
           accountNames={accountNames}
           userNames={userNames}
-          onSelectOpportunity={setSelectedOpportunity}
           onEdit={handleEdit}
           onDelete={handleDelete}
         />
       </div>
-
-      <OpportunityProfilePanel 
-        opportunity={selectedOpportunity} 
-        onClose={() => setSelectedOpportunity(null)}
-        userNames={userNames}
-      />
       <AddOpportunityModal
         open={isAddOpen}
         onClose={() => setIsAddOpen(false)}

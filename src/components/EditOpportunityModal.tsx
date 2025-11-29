@@ -1,7 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import type { Opportunity } from '../types/opportunity';
+import type { Note } from '../types/note';
+import type { User } from '../types/user';
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
+import { noteService } from '../services/noteService';
+import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 
 export default function EditOpportunityModal({ 
@@ -25,6 +29,9 @@ export default function EditOpportunityModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [users, setUsers] = useState<Map<string, User>>(new Map());
+  const [notesLoading, setNotesLoading] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -54,8 +61,69 @@ export default function EditOpportunityModal({
       } else {
         setAccountName(null);
       }
+      
+      // Load notes for this opportunity
+      if (opportunity.id) {
+        loadNotes(opportunity.id);
+      }
     }
   }, [opportunity]);
+
+  useEffect(() => {
+    // Load users for displaying note creators
+    const loadUsers = async () => {
+      try {
+        const usersData = await userService.getAll();
+        const usersMap = new Map<string, User>();
+        usersData.forEach(u => usersMap.set(u.id, u));
+        setUsers(usersMap);
+      } catch (err) {
+        console.error('Error loading users:', err);
+      }
+    };
+    loadUsers();
+  }, []);
+
+  const loadNotes = async (opportunityId: string) => {
+    if (!user) return;
+    
+    try {
+      setNotesLoading(true);
+      const allNotes = await noteService.getByOpportunity(opportunityId);
+      
+      // Filter: show public notes (isPrivate === false or undefined) or notes created by current user
+      const filteredNotes = allNotes.filter(note => 
+        !note.isPrivate || note.createdBy === user.id
+      );
+      
+      setNotes(filteredNotes);
+    } catch (err) {
+      console.error('Error loading notes:', err);
+      setNotes([]);
+    } finally {
+      setNotesLoading(false);
+    }
+  };
+
+  const getUserName = (userId: string): string => {
+    const userData = users.get(userId);
+    if (userData) {
+      return userData.displayName || 
+             (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : '') ||
+             userData.email;
+    }
+    return userId;
+  };
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   if (!open || !opportunity) return null;
 
@@ -152,115 +220,194 @@ export default function EditOpportunityModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={handleClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Edit Opportunity</h3>
+    <div className="fixed inset-0 bg-black/40 flex justify-center items-start z-50 overflow-y-auto pt-24 px-4" onClick={handleClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-lg w-full max-w-2xl mb-8 px-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Opportunity</h3>
+          <div className="flex items-center gap-2">
+            {/* Cancel icon */}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
+              title="Cancel"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 6L14 14M6 14L14 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {/* Save icon */}
+            <button
+              type="submit"
+              form="edit-opportunity-form"
+              className="p-1.5 rounded-full text-brand-500 hover:text-white hover:bg-brand-500 dark:text-brand-400 dark:hover:bg-brand-500 transition-colors disabled:opacity-50"
+              title="Save"
+              disabled={loading}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 10.5L8.5 14L15 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
         
         {error && (
-          <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg text-error-700 text-sm dark:bg-error-900/20 dark:border-error-800 dark:text-error-400">
+          <div className="mb-3 p-2.5 bg-error-50 border border-error-200 rounded-lg text-error-700 text-xs dark:bg-error-900/20 dark:border-error-800 dark:text-error-400">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opportunity Name *</label>
-            <input 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10" 
-              required 
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account</label>
-            <input 
-              value={accountName || accountId || ''} 
-              readOnly
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white cursor-not-allowed" 
-              disabled={true}
-              placeholder={accountId ? 'Loading account name...' : 'No account'}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount</label>
-            <input 
-              type="number"
-              step="0.01"
-              value={amount} 
-              onChange={e => setAmount(e.target.value)} 
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10" 
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stage *</label>
-            <select
-              value={stage}
-              onChange={e => setStage(e.target.value as Opportunity['stage'])}
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-              required
-              disabled={loading}
-            >
-              <option value="New">New</option>
-              <option value="Qualified">Qualified</option>
-              <option value="Proposal">Proposal</option>
-              <option value="Negotiation">Negotiation</option>
-              <option value="Closed Won">Closed Won</option>
-              <option value="Closed Lost">Closed Lost</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Probability (%)</label>
-            <input 
-              type="number"
-              min="0"
-              max="100"
-              value={probability} 
-              onChange={e => setProbability(e.target.value)} 
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10" 
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expected Close Date</label>
-            <input 
-              type="date"
-              value={expectedCloseDate} 
-              onChange={e => setExpectedCloseDate(e.target.value)} 
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10" 
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-            <textarea 
-              value={description} 
-              onChange={e => setDescription(e.target.value)} 
-              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10" 
-              rows={3}
-              disabled={loading}
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button 
-              type="button" 
-              onClick={handleClose} 
-              className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
-              disabled={loading}
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              className="px-4 py-2 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              disabled={loading}
-            >
-              {loading ? 'Updating...' : 'Update Opportunity'}
-            </button>
+        <form id="edit-opportunity-form" onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-1 gap-3">
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  Name:
+                </label>
+                <input 
+                  value={name} 
+                  onChange={e => setName(e.target.value)} 
+                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
+                  required 
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  Account:
+                </label>
+                <input 
+                  value={accountName || accountId || ''} 
+                  readOnly
+                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-not-allowed" 
+                  disabled={true}
+                  placeholder={accountId ? 'Loading account name...' : 'No account'}
+                />
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex items-center gap-2 sm:flex-1">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    Amount:
+                  </label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={amount} 
+                    onChange={e => setAmount(e.target.value)} 
+                    className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
+                    disabled={loading}
+                  />
+                </div>
+                <div className="flex items-center gap-2 sm:flex-1 mt-2 sm:mt-0">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    Stage:
+                  </label>
+                  <select
+                    value={stage}
+                    onChange={e => setStage(e.target.value as Opportunity['stage'])}
+                    className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                    required
+                    disabled={loading}
+                  >
+                    <option value="New">New</option>
+                    <option value="Qualified">Qualified</option>
+                    <option value="Proposal">Proposal</option>
+                    <option value="Negotiation">Negotiation</option>
+                    <option value="Closed Won">Closed Won</option>
+                    <option value="Closed Lost">Closed Lost</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  Probability (%):
+                </label>
+                <input 
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={probability} 
+                  onChange={e => setProbability(e.target.value)} 
+                  className="w-20 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                  Close Date:
+                </label>
+                <input 
+                  type="date"
+                  value={expectedCloseDate} 
+                  onChange={e => setExpectedCloseDate(e.target.value)} 
+                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">Description:</label>
+              <textarea 
+                value={description} 
+                onChange={e => setDescription(e.target.value)} 
+                className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
+                rows={2}
+                disabled={loading}
+              />
+            </div>
           </div>
         </form>
+
+        {/* Notes Section */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <h4 className="text-md font-medium mb-3 text-gray-900 dark:text-white text-left">Notes</h4>
+          
+          {notesLoading ? (
+            <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+              Loading notes...
+            </div>
+          ) : notes.length === 0 ? (
+            <div className="text-center py-3 text-gray-500 dark:text-gray-400 text-sm">
+              No notes found
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-48 overflow-y-auto">
+              {notes.map((note) => (
+                <div 
+                  key={note.id} 
+                  className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                        {getUserName(note.createdBy)}
+                      </span>
+                      {note.isPrivate && (
+                        <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded">
+                          Private
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatDate(note.createdAt)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                    {note.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -5,12 +5,11 @@ interface OpportunityTableProps {
   opportunities: Opportunity[];
   accountNames: Map<string, string>; // Map of accountId -> accountName
   userNames: Map<string, string>; // Map of userId -> user display name
-  onSelectOpportunity: (o: Opportunity) => void;
   onEdit: (o: Opportunity) => void;
   onDelete: (o: Opportunity) => void;
 }
 
-export default function OpportunityTable({ opportunities, accountNames, userNames, onSelectOpportunity, onEdit, onDelete }: OpportunityTableProps) {
+export default function OpportunityTable({ opportunities, accountNames, userNames, onEdit, onDelete }: OpportunityTableProps) {
   const navigate = useNavigate();
   const formatDate = (date: Date | undefined) => {
     if (!date) return '-';
@@ -26,8 +25,7 @@ export default function OpportunityTable({ opportunities, accountNames, userName
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  const handleEdit = (e: React.MouseEvent, opportunity: Opportunity) => {
-    e.stopPropagation();
+  const handleNameClick = (opportunity: Opportunity) => {
     onEdit(opportunity);
   };
 
@@ -64,7 +62,7 @@ export default function OpportunityTable({ opportunities, accountNames, userName
               <tr key={`${opportunity.id}-1`} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5">
                 <td className="px-4 py-2 text-sm text-left w-[40%]">
                   <button 
-                    onClick={() => onSelectOpportunity(opportunity)} 
+                    onClick={() => handleNameClick(opportunity)} 
                     className="text-brand-500 hover:text-brand-600 hover:underline font-medium dark:text-brand-400 text-left"
                   >
                     {opportunity.name}
@@ -113,15 +111,6 @@ export default function OpportunityTable({ opportunities, accountNames, userName
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={(e) => handleEdit(e, opportunity)}
-                      className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors flex-shrink-0"
-                      title="Edit"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button
