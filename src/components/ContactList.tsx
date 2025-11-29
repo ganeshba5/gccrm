@@ -114,27 +114,24 @@ export function ContactList() {
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {contacts.map((contact) => (
               <tr key={contact.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <button
                     onClick={() => navigate(`/contacts/${contact.id}/edit`)}
                     className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline text-left"
                   >
                     {contact.firstName} {contact.lastName}
                   </button>
-                  {contact.isPrimary && (
-                    <span className="text-xs text-brand-500 dark:text-brand-400">Primary</span>
-                  )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm text-gray-900 dark:text-white">{getAccountName(contact.accountId)}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm text-gray-900 dark:text-white">{contact.title || '-'}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm text-gray-500 dark:text-gray-400">{contact.email || '-'}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm text-gray-500 dark:text-gray-400">{contact.phone || contact.mobile || '-'}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
