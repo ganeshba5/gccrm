@@ -9,6 +9,8 @@ import type { Account } from '../types/account';
 import type { Contact } from '../types/contact';
 import type { Opportunity } from '../types/opportunity';
 import { useAuth } from '../context/AuthContext';
+import { userService } from '../services/userService';
+import type { User } from '../types/user';
 
 export function NoteList() {
   const navigate = useNavigate();
@@ -17,17 +19,31 @@ export function NoteList() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterId, setFilterId] = useState<string>('');
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadAccounts();
     loadContacts();
     loadOpportunities();
+    loadUsers();
     loadNotes();
   }, []);
+
+  const loadUsers = async () => {
+    try {
+      const usersData = await userService.getAll();
+      const usersMap = new Map<string, User>();
+      usersData.forEach(u => usersMap.set(u.id, u));
+      setUsers(usersMap);
+    } catch (err) {
+      console.error('Error loading users:', err);
+    }
+  };
 
   useEffect(() => {
     if (filterType !== 'all' && filterId) {
@@ -128,6 +144,33 @@ export function NoteList() {
     });
   };
 
+  const getUserName = (userId: string): string => {
+    const userData = users.get(userId);
+    if (userData) {
+      return userData.displayName || 
+             (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : '') ||
+             userData.email;
+    }
+    return userId;
+  };
+
+  const toggleNoteExpansion = (noteId: string) => {
+    setExpandedNotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(noteId)) {
+        newSet.delete(noteId);
+      } else {
+        newSet.add(noteId);
+      }
+      return newSet;
+    });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 100): string => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
+  };
+
   if (loading) {
     return <div className="p-4">Loading notes...</div>;
   }
@@ -182,61 +225,118 @@ export function NoteList() {
         </div>
       )}
 
-      <div className="space-y-4">
-        {notes.map((note) => (
-          <div key={note.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {getEntityName(note)}
-                </span>
-                {note.isPrivate && (
-                  <span className="ml-2 text-xs text-warning-500 dark:text-warning-400">Private</span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
-                  onClick={() => navigate(`/notes/${note.id}/edit`)}
-                  title="Edit"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-                <button
-                  className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
-                  onClick={async () => {
-                    if (window.confirm('Are you sure you want to delete this note?')) {
-                      try {
-                        await noteService.delete(note.id);
-                        loadNotes();
-                      } catch (err) {
-                        console.error('Error deleting note:', err);
-                        setError('Failed to delete note');
-                      }
-                    }
-                  }}
-                  title="Delete"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap mb-2">
-              {note.content}
-            </p>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {formatDate(note.createdAt)}
-            </div>
-          </div>
-        ))}
-        {notes.length === 0 && (
-          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg">
+      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+        {notes.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             No notes found
           </div>
+        ) : (
+          <>
+            {/* Grid Header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+              <div className="col-span-2">Entity</div>
+              <div className="col-span-2">Created By</div>
+              <div className="col-span-4">Content</div>
+              <div className="col-span-2">Date</div>
+              <div className="col-span-1">Status</div>
+              <div className="col-span-1">Actions</div>
+            </div>
+            {/* Grid Rows */}
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {notes.map((note) => {
+                const isExpanded = expandedNotes.has(note.id);
+                const contentIsLong = note.content.length > 100;
+                const displayContent = isExpanded || !contentIsLong 
+                  ? note.content 
+                  : truncateContent(note.content, 100);
+                
+                return (
+                  <div key={note.id} className="grid grid-cols-12 gap-4 px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors items-center">
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-900 dark:text-white truncate block">
+                        {getEntityName(note)}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-900 dark:text-white truncate block">
+                        {getUserName(note.createdBy)}
+                      </span>
+                    </div>
+                    <div className="col-span-4">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm text-gray-700 dark:text-gray-300 ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
+                          {displayContent}
+                        </span>
+                        {contentIsLong && (
+                          <button
+                            onClick={() => toggleNoteExpansion(note.id)}
+                            className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1"
+                            title={isExpanded ? "Show less" : "Show more"}
+                          >
+                            {isExpanded ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {formatDate(note.createdAt)}
+                      </span>
+                    </div>
+                    <div className="col-span-1">
+                      {note.isPrivate && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded whitespace-nowrap">
+                          Private
+                        </span>
+                      )}
+                    </div>
+                    <div className="col-span-1 flex items-center justify-end gap-1">
+                      <button
+                        className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                        onClick={() => navigate(`/notes/${note.id}/edit`)}
+                        title="Edit"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                        onClick={async () => {
+                          if (window.confirm('Are you sure you want to delete this note?')) {
+                            try {
+                              await noteService.delete(note.id);
+                              if (filterType !== 'all' && filterId) {
+                                loadFilteredNotes();
+                              } else {
+                                loadNotes();
+                              }
+                            } catch (err) {
+                              console.error('Error deleting note:', err);
+                              setError('Failed to delete note');
+                            }
+                          }
+                        }}
+                        title="Delete"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

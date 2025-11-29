@@ -35,6 +35,7 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
   const [isCreating, setIsCreating] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (entityId && entityType) {
@@ -140,6 +141,23 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
     return userId;
   };
 
+  const toggleNoteExpansion = (noteId: string) => {
+    setExpandedNotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(noteId)) {
+        newSet.delete(noteId);
+      } else {
+        newSet.add(noteId);
+      }
+      return newSet;
+    });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 100): string => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
+  };
+
   const getEntityName = (): string => {
     if (entityType === 'opportunity') return 'Opportunity';
     if (entityType === 'account') return 'Account';
@@ -241,53 +259,97 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
         {notes.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             No notes found. {!isCreating && <button onClick={() => setIsCreating(true)} className="text-brand-500 hover:underline">Create one</button>}
           </div>
         ) : (
-          notes.map((note) => (
-            <div key={note.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {getUserName(note.createdBy)}
-                    </span>
-                    {note.isPrivate && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded">
-                        Private
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(note.createdAt).toLocaleString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                    {note.content}
-                  </p>
-                </div>
-                {user && note.createdBy === user.id && (
-                  <button
-                    onClick={() => handleDeleteNote(note.id)}
-                    className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors ml-2"
-                    title="Delete"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+          <>
+            {/* Grid Header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+              <div className="col-span-2">Created By</div>
+              <div className="col-span-6">Content</div>
+              <div className="col-span-2">Date</div>
+              <div className="col-span-1">Status</div>
+              <div className="col-span-1">Actions</div>
             </div>
-          ))
+            {/* Grid Rows */}
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {notes.map((note) => {
+                const isExpanded = expandedNotes.has(note.id);
+                const contentIsLong = note.content.length > 100;
+                const displayContent = isExpanded || !contentIsLong 
+                  ? note.content 
+                  : truncateContent(note.content, 100);
+                
+                return (
+                  <div key={note.id} className="grid grid-cols-12 gap-4 px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors items-center">
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-900 dark:text-white truncate block">
+                        {getUserName(note.createdBy)}
+                      </span>
+                    </div>
+                    <div className="col-span-6">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm text-gray-700 dark:text-gray-300 ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
+                          {displayContent}
+                        </span>
+                        {contentIsLong && (
+                          <button
+                            onClick={() => toggleNoteExpansion(note.id)}
+                            className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1"
+                            title={isExpanded ? "Show less" : "Show more"}
+                          >
+                            {isExpanded ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {new Date(note.createdAt).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    <div className="col-span-1">
+                      {note.isPrivate && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded whitespace-nowrap">
+                          Private
+                        </span>
+                      )}
+                    </div>
+                    <div className="col-span-1 flex items-center justify-end">
+                      {user && note.createdBy === user.id && (
+                        <button
+                          onClick={() => handleDeleteNote(note.id)}
+                          className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

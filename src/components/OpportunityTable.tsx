@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Opportunity } from '../types/opportunity';
 
@@ -57,9 +58,9 @@ export default function OpportunityTable({ opportunities, accountNames, userName
         </thead>
         <tbody>
           {opportunities.map(opportunity => (
-            <>
+            <React.Fragment key={opportunity.id}>
               {/* Row 1: Name, Close Date, Amount, Stage */}
-              <tr key={`${opportunity.id}-1`} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5">
+              <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5">
                 <td className="px-4 py-2 text-sm text-left w-[40%]">
                   <button 
                     onClick={() => handleNameClick(opportunity)} 
@@ -79,7 +80,7 @@ export default function OpportunityTable({ opportunities, accountNames, userName
                 </td>
               </tr>
               {/* Row 2: Account, Probability, Owned By, Actions */}
-              <tr key={`${opportunity.id}-2`} className="border-b-2 border-gray-400 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-white/5">
+              <tr className="border-b-2 border-gray-400 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-white/5">
                 <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 text-left w-[40%]">
                   {opportunity.accountId ? (accountNames.get(opportunity.accountId) || opportunity.accountId) : '-'}
                 </td>
@@ -125,7 +126,7 @@ export default function OpportunityTable({ opportunities, accountNames, userName
                   </div>
                 </td>
               </tr>
-            </>
+            </React.Fragment>
           ))}
           {opportunities.length === 0 && (
             <tr>

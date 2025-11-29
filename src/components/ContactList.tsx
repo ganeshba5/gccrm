@@ -115,9 +115,12 @@ export function ContactList() {
             {contacts.map((contact) => (
               <tr key={contact.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                  <button
+                    onClick={() => navigate(`/contacts/${contact.id}/edit`)}
+                    className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline text-left"
+                  >
                     {contact.firstName} {contact.lastName}
-                  </div>
+                  </button>
                   {contact.isPrimary && (
                     <span className="text-xs text-brand-500 dark:text-brand-400">Primary</span>
                   )}
@@ -152,15 +155,6 @@ export function ContactList() {
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </button>
-                    <button
-                      className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
-                      onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                      title="Edit"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button

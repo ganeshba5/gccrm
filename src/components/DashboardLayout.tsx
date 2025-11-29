@@ -12,6 +12,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -115,6 +116,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <header className="sticky top-0 flex w-full bg-white border-gray-200 z-99999 dark:border-gray-800 dark:bg-gray-900 border-b">
         <div className="flex items-center justify-between w-full px-4 py-3 lg:px-6 lg:py-4">
           <div className="flex items-center gap-3">
+            {/* Hamburger menu button */}
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              aria-label="Toggle menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isSidebarOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
             <span className="text-2xl lg:text-3xl">{getPageMeta().icon}</span>
             <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">
               {getPageMeta().title}
@@ -126,7 +141,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <button
                 onClick={() => {
                   const action = getPrimaryAction();
-                  if (action) navigate(action.to);
+                  if (action) {
+                    // For opportunities, add query parameter to trigger modal
+                    if (action.to === '/opportunities') {
+                      navigate('/opportunities?new=true');
+                    } else {
+                      navigate(action.to);
+                    }
+                  }
                 }}
                 className="hidden sm:inline-flex bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-theme-sm transition-colors"
               >
@@ -157,35 +179,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </header>
 
-      <div className="flex flex-1">
-        {/* Sidebar - fixed beside content */}
-        <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 text-gray-900 flex flex-col sticky top-[64px] self-start h-[calc(100vh-64px)]">
-          {/* Navigation */}
-          <nav className="flex-1 p-5 space-y-1">
-            {menuItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`menu-item group ${
-                  isActive(item.path) ? 'menu-item-active' : 'menu-item-inactive'
-                }`}
-              >
-                <span className={`menu-item-icon-size ${
-                  isActive(item.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
-                }`}>
-                  <span className="text-xl">{item.icon}</span>
-                </span>
-                <span className="font-medium">{item.label}</span>
-              </Link>
-            ))}
-          </nav>
-        </aside>
+      {/* Backdrop overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-99998 transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-        {/* Main Content - scrollable */}
-        <main className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-          {children}
-        </main>
-      </div>
+      {/* Floating Sidebar - overlay */}
+      <aside
+        className={`fixed top-[64px] left-0 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 text-gray-900 flex flex-col h-[calc(100vh-64px)] z-99999 transform transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } shadow-theme-lg`}
+      >
+        {/* Navigation */}
+        <nav className="flex-1 p-5 space-y-1 overflow-y-auto custom-scrollbar">
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => setIsSidebarOpen(false)}
+              className={`menu-item group ${
+                isActive(item.path) ? 'menu-item-active' : 'menu-item-inactive'
+              }`}
+            >
+              <span className={`menu-item-icon-size ${
+                isActive(item.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
+              }`}>
+                <span className="text-xl">{item.icon}</span>
+              </span>
+              <span className="font-medium">{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Main Content - scrollable */}
+      <main className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+        {children}
+      </main>
 
       {/* User Profile Modal */}
       <UserProfileModal

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import type { Task } from '../types/task';
 import { userService } from '../services/userService';
 import type { User } from '../types/user';
+import DatePicker from './DatePicker';
 
 type EntityType = 'opportunity' | 'account' | 'contact';
 
@@ -40,6 +41,7 @@ function EntityTasksPage({ entityType, entityId }: { entityType: EntityType; ent
     dueDate: '',
     assignedTo: '',
   });
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (entityId && entityType) {
@@ -203,6 +205,23 @@ function EntityTasksPage({ entityType, entityId }: { entityType: EntityType; ent
     }
   };
 
+  const toggleTaskExpansion = (taskId: string) => {
+    setExpandedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 100): string => {
+    if (!content || content.length <= maxLength) return content || '-';
+    return content.substring(0, maxLength) + '...';
+  };
+
   if (loading) {
     return <div className="p-4">Loading tasks...</div>;
   }
@@ -301,10 +320,10 @@ function EntityTasksPage({ entityType, entityId }: { entityType: EntityType; ent
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Due Date
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={newTask.dueDate}
-                  onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                  onChange={(value) => setNewTask({ ...newTask, dueDate: value })}
+                  placeholder="Select due date"
                   className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
                 />
               </div>
@@ -355,75 +374,126 @@ function EntityTasksPage({ entityType, entityId }: { entityType: EntityType; ent
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
         {tasks.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             No tasks found. {!isCreating && <button onClick={() => setIsCreating(true)} className="text-brand-500 hover:underline">Create one</button>}
           </div>
         ) : (
-          tasks.map((task) => (
-            <div key={task.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                      {task.title}
-                    </h3>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(task.status)}`}>
-                      {task.status.replace('_', ' ').toUpperCase()}
-                    </span>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${getPriorityColor(task.priority)}`}>
-                      {task.priority.toUpperCase()}
-                    </span>
-                  </div>
-                  {task.description && (
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                      {task.description}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Created by: {getUserName(task.createdBy)}</span>
-                    {task.assignedTo && (
-                      <span>Assigned to: {getUserName(task.assignedTo)}</span>
-                    )}
-                    {task.dueDate && (
-                      <span>Due: {new Date(task.dueDate).toLocaleDateString()}</span>
-                    )}
-                    <span>
-                      Created: {new Date(task.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 ml-4">
-                  {user && (task.createdBy === user.id || task.assignedTo === user.id) && (
-                    <>
-                      <select
-                        value={task.status}
-                        onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value as Task['status'])}
-                        className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-                      >
-                        <option value="not_started">Not Started</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                      {task.createdBy === user.id && (
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+          <>
+            {/* Grid Header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+              <div className="col-span-2">Title</div>
+              <div className="col-span-3">Description</div>
+              <div className="col-span-1">Status</div>
+              <div className="col-span-1">Priority</div>
+              <div className="col-span-2">Assigned To</div>
+              <div className="col-span-1">Due Date</div>
+              <div className="col-span-1">Created</div>
+              <div className="col-span-1">Actions</div>
             </div>
-          ))
+            {/* Grid Rows */}
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {tasks.map((task) => {
+                const isExpanded = expandedTasks.has(task.id);
+                const descriptionIsLong = task.description && task.description.length > 100;
+                const displayDescription = isExpanded || !descriptionIsLong 
+                  ? (task.description || '-')
+                  : truncateContent(task.description || '', 100);
+                
+                return (
+                  <div key={task.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <div className="col-span-2 flex items-center">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {task.title}
+                      </span>
+                    </div>
+                    <div className="col-span-3 flex items-start">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 break-words">
+                          {displayDescription}
+                        </p>
+                        {descriptionIsLong && (
+                          <button
+                            onClick={() => toggleTaskExpansion(task.id)}
+                            className="mt-1 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1"
+                          >
+                            {isExpanded ? (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                                Show less
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                                Show more
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="col-span-1 flex items-center">
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(task.status)}`}>
+                        {task.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="col-span-1 flex items-center">
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${getPriorityColor(task.priority)}`}>
+                        {task.priority}
+                      </span>
+                    </div>
+                    <div className="col-span-2 flex items-center">
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {task.assignedTo ? getUserName(task.assignedTo) : 'Unassigned'}
+                      </span>
+                    </div>
+                    <div className="col-span-1 flex items-center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-1 flex items-center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {new Date(task.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="col-span-1 flex items-center justify-end gap-2">
+                      {user && (task.createdBy === user.id || task.assignedTo === user.id) && (
+                        <>
+                          <select
+                            value={task.status}
+                            onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value as Task['status'])}
+                            className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                          >
+                            <option value="not_started">Not Started</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                          {task.createdBy === user.id && (
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                              title="Delete"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

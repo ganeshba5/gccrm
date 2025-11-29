@@ -207,15 +207,11 @@ service cloud.firestore {
       // Allow create only by admins (but since we use app-level auth, this is handled in app)
       allow create: if true; // Application validates admin role
       // Allow updates:
-      // - Login updates (lastLogin, password) - allow unauthenticated
-      // - Other updates should be validated in application code
+      // - Application code handles authorization (admin checks, etc.)
+      // - Only ensure createdAt doesn't change (immutable field)
       allow update: if 
-        // Allow login-related updates (lastLogin, password, updatedAt)
-        // Ensure other critical fields don't change
-        request.resource.data.createdAt == resource.data.createdAt &&
-        request.resource.data.role == resource.data.role &&
-        request.resource.data.email == resource.data.email &&
-        request.resource.data.isActive == resource.data.isActive;
+        // Ensure createdAt doesn't change (immutable field)
+        request.resource.data.createdAt == resource.data.createdAt;
       // Allow delete - validated in application code
       allow delete: if true; // Application validates admin role
     }

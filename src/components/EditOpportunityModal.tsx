@@ -7,6 +7,7 @@ import { accountService } from '../services/accountService';
 import { noteService } from '../services/noteService';
 import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
+import DatePicker from './DatePicker';
 
 export default function EditOpportunityModal({ 
   open, 
@@ -32,6 +33,7 @@ export default function EditOpportunityModal({
   const [notes, setNotes] = useState<Note[]>([]);
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [notesLoading, setNotesLoading] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const { user } = useAuth();
 
   useEffect(() => {
@@ -123,6 +125,23 @@ export default function EditOpportunityModal({
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const toggleNoteExpansion = (noteId: string) => {
+    setExpandedNotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(noteId)) {
+        newSet.delete(noteId);
+      } else {
+        newSet.add(noteId);
+      }
+      return newSet;
+    });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 80): string => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
   };
 
   if (!open || !opportunity) return null;
@@ -344,12 +363,12 @@ export default function EditOpportunityModal({
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                   Close Date:
                 </label>
-                <input 
-                  type="date"
-                  value={expectedCloseDate} 
-                  onChange={e => setExpectedCloseDate(e.target.value)} 
-                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
+                <DatePicker
+                  value={expectedCloseDate}
+                  onChange={setExpectedCloseDate}
+                  placeholder="Select close date"
                   disabled={loading}
+                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
                 />
               </div>
             </div>
@@ -379,32 +398,72 @@ export default function EditOpportunityModal({
               No notes found
             </div>
           ) : (
-            <div className="space-y-3 max-h-48 overflow-y-auto">
-              {notes.map((note) => (
-                <div 
-                  key={note.id} 
-                  className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                        {getUserName(note.createdBy)}
-                      </span>
-                      {note.isPrivate && (
-                        <span className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded">
-                          Private
+            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
+              {/* Grid Header */}
+              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
+                <div className="col-span-3">Created By</div>
+                <div className="col-span-5">Content</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-1">Status</div>
+                <div className="col-span-1"></div>
+              </div>
+              {/* Grid Rows */}
+              <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                {notes.map((note) => {
+                  const isExpanded = expandedNotes.has(note.id);
+                  const contentIsLong = note.content.length > 80;
+                  const displayContent = isExpanded || !contentIsLong 
+                    ? note.content 
+                    : truncateContent(note.content, 80);
+                  
+                  return (
+                    <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
+                      <div className="col-span-3">
+                        <span className="text-xs text-gray-900 dark:text-white truncate block">
+                          {getUserName(note.createdBy)}
                         </span>
-                      )}
+                      </div>
+                      <div className="col-span-5">
+                        <div className="flex items-center gap-1">
+                          <span className={`text-xs text-gray-700 dark:text-gray-300 ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
+                            {displayContent}
+                          </span>
+                          {contentIsLong && (
+                            <button
+                              onClick={() => toggleNoteExpansion(note.id)}
+                              className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center"
+                              title={isExpanded ? "Show less" : "Show more"}
+                            >
+                              {isExpanded ? (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                              ) : (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                          {formatDate(note.createdAt)}
+                        </span>
+                      </div>
+                      <div className="col-span-1">
+                        {note.isPrivate && (
+                          <span className="px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded whitespace-nowrap">
+                            Private
+                          </span>
+                        )}
+                      </div>
+                      <div className="col-span-1"></div>
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatDate(note.createdAt)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                    {note.content}
-                  </p>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

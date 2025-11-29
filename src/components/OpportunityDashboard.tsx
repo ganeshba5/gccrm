@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import OpportunityTable from './OpportunityTable';
 // OpportunityProfilePanel removed - EditOpportunityModal is used instead
 import AddOpportunityModal from './AddOpportunityModal';
@@ -10,9 +11,11 @@ import type { Account } from '../types/account';
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
 import { userService } from '../services/userService';
+import DatePicker from './DatePicker';
 // canAccessAllData removed - not used in this component
 
 export default function OpportunityDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   // const [users] = useState<any[]>([]); // Reserved for future use
@@ -30,6 +33,16 @@ export default function OpportunityDashboard() {
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const { user, loading: authLoading } = useAuth();
+
+  // Check for 'new' query parameter to open add modal
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setIsAddOpen(true);
+      // Remove the query parameter from URL
+      searchParams.delete('new');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const fetchAccounts = async () => {
     try {
@@ -397,20 +410,18 @@ export default function OpportunityDashboard() {
           )}
           {dateFilterType === 'custom' && (
             <div className="flex items-center gap-2">
-              <input
-                type="date"
+              <DatePicker
                 value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+                onChange={setCustomStartDate}
                 placeholder="Start Date"
+                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
               />
               <span className="text-gray-500 dark:text-gray-400">to</span>
-              <input
-                type="date"
+              <DatePicker
                 value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+                onChange={setCustomEndDate}
                 placeholder="End Date"
+                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
               />
             </div>
           )}

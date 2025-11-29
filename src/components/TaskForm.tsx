@@ -8,6 +8,7 @@ import { opportunityService } from '../services/opportunityService';
 import type { Account } from '../types/account';
 import type { Contact } from '../types/contact';
 import type { Opportunity } from '../types/opportunity';
+import DatePicker from './DatePicker';
 import { useAuth } from '../context/AuthContext';
 
 const initialFormData: TaskFormData = {
@@ -228,12 +229,15 @@ export function TaskForm() {
             <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Due Date
             </label>
-            <input
-              type="date"
-              id="dueDate"
-              name="dueDate"
+            <DatePicker
               value={formData.dueDate ? new Date(formData.dueDate).toISOString().split('T')[0] : ''}
-              onChange={handleInputChange}
+              onChange={(value) => {
+                setFormData(prev => ({
+                  ...prev,
+                  dueDate: value ? new Date(value) : undefined
+                }));
+              }}
+              placeholder="Select due date"
               className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
             />
           </div>

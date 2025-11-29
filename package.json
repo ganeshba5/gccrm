@@ -20,14 +20,17 @@
     "bcryptjs": "^3.0.3",
     "firebase": "^12.5.0",
     "firebase-admin": "^13.6.0",
+    "flatpickr": "^4.6.13",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-flatpickr": "^4.0.11",
     "react-router-dom": "^7.9.5",
     "recharts": "^3.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/flatpickr": "^3.0.2",
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
