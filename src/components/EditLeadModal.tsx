@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import type { Lead } from '../types';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';

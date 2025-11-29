@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Opportunity } from '../types/opportunity';
 import { accountService } from '../services/accountService';
-import type { Account } from '../types/account';
+// Account type removed - not used in this component
 
 interface OpportunityProfilePanelProps {
   opportunity: Opportunity | null;

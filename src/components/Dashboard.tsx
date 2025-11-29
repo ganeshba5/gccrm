@@ -49,8 +49,8 @@ export default function Dashboard() {
   // Calculate statistics
   const totalOpportunities = opportunities.length;
   const totalAccounts = accounts.length;
-  const newOpps = opportunitiesByStage['New'] || 0;
-  const qualifiedOpps = opportunitiesByStage['Qualified'] || 0;
+  // const newOpps = opportunitiesByStage['New'] || 0; // Reserved for future use
+  // const qualifiedOpps = opportunitiesByStage['Qualified'] || 0; // Reserved for future use
   const closedWon = opportunitiesByStage['Closed Won'] || 0;
   const totalValue = opportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
 
@@ -132,13 +132,13 @@ export default function Dashboard() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   innerRadius={40}
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {chartData.map((entry, index) => (
+                  {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

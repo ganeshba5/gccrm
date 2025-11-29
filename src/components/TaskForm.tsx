@@ -119,7 +119,7 @@ export function TaskForm() {
       if (id) {
         await taskService.update(id, submitData);
       } else {
-        await taskService.create(submitData, user.uid);
+        await taskService.create(submitData, user.id);
       }
       navigate('/tasks');
     } catch (err) {

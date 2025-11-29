@@ -28,7 +28,7 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
   const navigate = useNavigate();
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
-  const [allNotes, setAllNotes] = useState<Note[]>([]);
+  // const [allNotes, setAllNotes] = useState<Note[]>([]); // Reserved for future use
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,8 +68,6 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
       } else if (entityType === 'contact') {
         fetchedNotes = await noteService.getByContact(entityId);
       }
-      
-      setAllNotes(fetchedNotes);
       
       // Filter notes: show public notes (isPrivate === false or undefined) or notes created by current user
       if (user) {

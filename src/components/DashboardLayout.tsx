@@ -28,9 +28,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     console.log('Go clicked with value:', searchValue);
   };
 
-  const handleClear = () => {
-    setSearchValue('');
-  };
+  // const handleClear = () => {
+  //   setSearchValue('');
+  // }; // Reserved for future use
 
   const handleProfileUpdate = () => {
     // Refresh the page to get updated user data

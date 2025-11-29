@@ -114,7 +114,7 @@ export function NoteForm() {
       if (id) {
         await noteService.update(id, submitData);
       } else {
-        await noteService.create(submitData, user.uid);
+        await noteService.create(submitData, user.id);
       }
       navigate('/notes');
     } catch (err) {

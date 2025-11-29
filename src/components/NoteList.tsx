@@ -69,7 +69,7 @@ export function NoteList() {
       setLoading(true);
       const data = await noteService.getAll();
       // Filter out private notes that user didn't create
-      const filtered = data.filter(note => !note.isPrivate || note.createdBy === user?.uid);
+      const filtered = data.filter(note => !note.isPrivate || note.createdBy === user?.id);
       setNotes(filtered);
       setError(null);
     } catch (err) {
@@ -91,7 +91,7 @@ export function NoteList() {
       } else if (filterType === 'opportunity' && filterId) {
         data = await noteService.getByOpportunity(filterId);
       }
-      const filtered = data.filter(note => !note.isPrivate || note.createdBy === user?.uid);
+      const filtered = data.filter(note => !note.isPrivate || note.createdBy === user?.id);
       setNotes(filtered);
       setError(null);
     } catch (err) {

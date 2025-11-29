@@ -25,7 +25,7 @@ export default function LeadDashboard() {
   const fetchLeads = async () => {
     try {
       console.log('Fetching leads - User authenticated:', !!user);
-      console.log('User UID:', user?.uid);
+      console.log('User ID:', user?.id);
       console.log('Auth current user:', auth.currentUser?.uid);
       
       // Ensure we have an authenticated user

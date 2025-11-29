@@ -6,16 +6,16 @@ import EditOpportunityModal from './EditOpportunityModal';
 import { useAuth } from '../context/AuthContext';
 import type { Opportunity } from '../types/opportunity';
 import type { Account } from '../types/account';
-import type { User } from '../types/user';
+// User type removed - not directly used in this component
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
 import { userService } from '../services/userService';
-import { canAccessAllData } from '../lib/auth-helpers';
+// canAccessAllData removed - not used in this component
 
 export default function OpportunityDashboard() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  // const [users] = useState<any[]>([]); // Reserved for future use
   const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
   const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
@@ -74,7 +74,7 @@ export default function OpportunityDashboard() {
   const fetchUsers = async () => {
     try {
       const usersData = await userService.getAll();
-      setUsers(usersData);
+      // setUsers(usersData); // Reserved for future use
       
       // Create a map of userId -> user display name (or email if no display name)
       const namesMap = new Map<string, string>();
@@ -167,7 +167,7 @@ export default function OpportunityDashboard() {
       return { start: null, end: null };
     }
 
-    const now = new Date();
+    // const now = new Date(); // Not used in this function
     let start: Date;
     let end: Date;
 

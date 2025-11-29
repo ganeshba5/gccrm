@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 // Log environment variables availability
 console.log('Firebase Config Environment Variables Status:', {
@@ -27,7 +27,7 @@ console.log('Initializing Firebase with config:', {
 });
 
 // Initialize Firebase
-let app;
+let app: FirebaseApp;
 try {
   app = initializeApp(firebaseConfig);
   console.log('Firebase initialized successfully');
@@ -36,7 +36,7 @@ try {
   throw error;
 }
 // Initialize Authentication with debug mode
-let auth;
+let auth: Auth;
 try {
   auth = getAuth(app);
   // Enable debugging
@@ -68,7 +68,7 @@ try {
 }
 
 // Initialize Firestore
-let db;
+let db: Firestore;
 try {
   // Initialize Firestore with the same app instance
   // Firestore automatically uses the auth from the same app
@@ -82,4 +82,7 @@ try {
 }
 
 export { app, auth, db };
+export type { FirebaseApp } from 'firebase/app';
+export type { Auth } from 'firebase/auth';
+export type { Firestore } from 'firebase/firestore';
 export default app;

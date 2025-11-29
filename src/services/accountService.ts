@@ -13,7 +13,7 @@ import {
   type DocumentSnapshot,
   type Firestore,
 } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { ensureAuthenticated } from '../lib/firebase-helpers';
 import { getCurrentUser, canAccessAllData } from '../lib/auth-helpers';
 import type { Account, AccountFormData } from '../types/account';

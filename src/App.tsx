@@ -6,9 +6,7 @@ import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import Dashboard from './components/Dashboard';
 import OpportunityDashboard from './components/OpportunityDashboard';
-import ContactsPage from './components/ContactsPage';
-import TasksPage from './components/TasksPage';
-import NotesPage from './components/NotesPage';
+// ContactsPage, TasksPage, NotesPage are used via EntityNotesPage and EntityTasksPage
 import SettingsPage from './components/SettingsPage';
 import { AccountList } from './components/AccountList';
 import { AccountForm } from './components/AccountForm';

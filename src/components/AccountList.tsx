@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Account } from '../types/account';
 import { accountService } from '../services/accountService';
-import { opportunityService } from '../services/opportunityService';
+// opportunityService removed - not used in this component
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
 

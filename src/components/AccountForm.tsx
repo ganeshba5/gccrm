@@ -30,7 +30,7 @@ export function AccountForm() {
   const [error, setError] = useState<string | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(isViewMode);
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(isViewMode ? 'View only mode' : null);
-  const [account, setAccount] = useState<any>(null);
+  const [, setAccount] = useState<any>(null);
 
   useEffect(() => {
     if (id) {

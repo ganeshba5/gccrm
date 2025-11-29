@@ -60,7 +60,7 @@ export default function AddLeadModal({ open, onClose, onCreate }: { open: boolea
     const newLead: any = {
       name: name.trim(),
       status: 'New' as const,
-      owner: user?.uid || 'Unassigned',
+      owner: user?.id || 'Unassigned',
       createdAt: now,
     };
 
@@ -82,7 +82,7 @@ export default function AddLeadModal({ open, onClose, onCreate }: { open: boolea
         createdAt: newLead.createdAt.toString(),
         fieldCount: Object.keys(newLead).length
       });
-      console.log('User UID:', user.uid);
+      console.log('User ID:', user.id);
       
       // Add to Firestore
       const docRef = await addDoc(collection(db, 'leads'), newLead);
@@ -105,7 +105,7 @@ export default function AddLeadModal({ open, onClose, onCreate }: { open: boolea
     } catch (err: any) {
       console.error('Failed to create lead:', err);
       console.error('User authenticated:', !!user);
-      console.error('User UID:', user?.uid);
+      console.error('User ID:', user?.id);
       console.error('Lead data:', newLead);
       
       // Provide user-friendly error messages

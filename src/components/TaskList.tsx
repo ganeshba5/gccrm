@@ -33,7 +33,7 @@ export function TaskList() {
 
   const filteredTasks = tasks.filter(task => {
     if (filterStatus !== 'all' && task.status !== filterStatus) return false;
-    if (filterAssigned === 'me' && task.assignedTo !== user?.uid) return false;
+    if (filterAssigned === 'me' && task.assignedTo !== user?.id) return false;
     if (filterAssigned === 'unassigned' && task.assignedTo) return false;
     return true;
   });
