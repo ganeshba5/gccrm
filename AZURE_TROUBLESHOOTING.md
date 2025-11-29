@@ -2,7 +2,7 @@
 
 ## Common Deployment Errors
 
-### "Failure during content distribution"
+### "Failure during content distribution" or "app build failed to produce artifact folder: 'build'"
 
 This error typically occurs when:
 
@@ -10,10 +10,12 @@ This error typically occurs when:
    - Check GitHub Actions logs to verify the build step completed successfully
    - Ensure `dist/index.html` exists after build
    - Verify all environment variables are set in GitHub Secrets
+   - Check that the `build` directory was created (workflow copies `dist` to `build`)
 
 2. **Missing or incorrect configuration**
    - Ensure `staticwebapp.config.json` is in the repository root
-   - Verify the `output_location` in the workflow matches your build output directory (`dist`)
+   - Verify the `output_location` in the workflow is set to `build` (not `dist`)
+   - Check Azure Portal → Static Web App → Configuration → Deployment to ensure output location matches
 
 3. **TypeScript compilation errors**
    - Check the build logs for TypeScript errors

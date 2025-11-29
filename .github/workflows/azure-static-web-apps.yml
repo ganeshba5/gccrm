@@ -78,6 +78,16 @@ jobs:
             echo "Warning: staticwebapp.config.json not found"
           fi
       
+      - name: Create build directory for Azure
+        run: |
+          # Azure Static Web Apps may look for 'build' folder
+          # Copy dist to build as a fallback
+          if [ -d "dist" ]; then
+            cp -r dist build
+            echo "Copied dist to build directory"
+            ls -la build/
+          fi
+      
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -87,7 +97,7 @@ jobs:
           action: "upload"
           app_location: "/"
           api_location: ""
-          output_location: "dist"
+          output_location: "build"
           skip_app_build: true
           skip_api_build: true
 
