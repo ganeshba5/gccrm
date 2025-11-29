@@ -11,7 +11,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const [searchValue, setSearchValue] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -22,15 +21,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       console.error('Error signing out:', error);
     }
   };
-
-  const handleGo = () => {
-    // Handle search/navigation action
-    console.log('Go clicked with value:', searchValue);
-  };
-
-  // const handleClear = () => {
-  //   setSearchValue('');
-  // }; // Reserved for future use
 
   const handleProfileUpdate = () => {
     // Refresh the page to get updated user data
