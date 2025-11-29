@@ -56,36 +56,26 @@ jobs:
       
       - name: Verify build output
         run: |
-          if [ ! -d "dist" ]; then
-            echo "Error: dist directory does not exist"
+          if [ ! -d "build" ]; then
+            echo "Error: build directory does not exist"
             exit 1
           fi
-          if [ ! -f "dist/index.html" ]; then
-            echo "Error: dist/index.html does not exist"
+          if [ ! -f "build/index.html" ]; then
+            echo "Error: build/index.html does not exist"
             exit 1
           fi
           echo "Build output verified:"
-          ls -la dist/
-          echo "Total files in dist:"
-          find dist -type f | wc -l
+          ls -la build/
+          echo "Total files in build:"
+          find build -type f | wc -l
           echo "Checking for staticwebapp.config.json..."
           if [ -f "staticwebapp.config.json" ]; then
             echo "staticwebapp.config.json found in root"
             cat staticwebapp.config.json
-            # Copy config to dist as backup (Azure should read from root, but this ensures it's available)
-            cp staticwebapp.config.json dist/ || true
+            # Copy config to build as backup (Azure should read from root, but this ensures it's available)
+            cp staticwebapp.config.json build/ || true
           else
             echo "Warning: staticwebapp.config.json not found"
-          fi
-      
-      - name: Create build directory for Azure
-        run: |
-          # Azure Static Web Apps may look for 'build' folder
-          # Copy dist to build as a fallback
-          if [ -d "dist" ]; then
-            cp -r dist build
-            echo "Copied dist to build directory"
-            ls -la build/
           fi
       
       - name: Build And Deploy
@@ -98,6 +88,7 @@ jobs:
           app_location: "/"
           api_location: ""
           output_location: "build"
+          # We build the app ourselves, so skip Azure's build
           skip_app_build: true
           skip_api_build: true
 

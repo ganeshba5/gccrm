@@ -7,8 +7,8 @@ export default defineConfig({
   // Base path for Azure Static Web Apps (use '/' for root)
   base: '/',
   build: {
-    // Output directory for Azure Static Web Apps
-    outDir: 'dist',
+    // Output directory for Azure Static Web Apps (changed from 'dist' to 'build' for Azure compatibility)
+    outDir: 'build',
     // Generate source maps for production debugging (optional)
     sourcemap: false,
   },

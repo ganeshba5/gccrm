@@ -28,7 +28,7 @@ This guide will help you deploy the GCCRM application to Azure Static Web Apps.
    - **Build Presets**: Custom
    - **App location**: `/` (root of repository)
    - **Api location**: Leave empty (no API)
-   - **Output location**: `build` (Vite builds to `dist`, but workflow copies to `build` for Azure compatibility)
+   - **Output location**: `build` (Vite is configured to build directly to `build` for Azure compatibility)
 
 6. Click "Review + create", then "Create"
 
@@ -149,7 +149,7 @@ gccrmapp/
 
 ## Important Notes
 
-1. **Build Output**: Vite builds to the `dist` directory, but the workflow copies it to `build` for Azure Static Web Apps compatibility. The `output_location` in the workflow is set to `build`.
+1. **Build Output**: Vite is configured to build directly to the `build` directory for Azure Static Web Apps compatibility. The `output_location` in the workflow is set to `build`.
 2. **SPA Routing**: The `staticwebapp.config.json` ensures all routes serve `index.html` for client-side routing
 3. **Environment Variables**: Must be set in both GitHub Secrets (for build) and Azure Application Settings (for runtime)
 4. **Firebase Rules**: Make sure your Firestore security rules are deployed separately using Firebase CLI
