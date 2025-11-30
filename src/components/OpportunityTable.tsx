@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Opportunity } from '../types/opportunity';
 
@@ -12,6 +12,7 @@ interface OpportunityTableProps {
 
 export default function OpportunityTable({ opportunities, accountNames, userNames, onEdit, onDelete }: OpportunityTableProps) {
   const navigate = useNavigate();
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string | null>>(new Set());
   const formatDate = (date: Date | undefined) => {
     if (!date) return '-';
     return new Date(date).toLocaleDateString('en-US', {
@@ -62,6 +63,18 @@ export default function OpportunityTable({ opportunities, accountNames, userName
     opps.sort((a, b) => a.name.localeCompare(b.name));
   });
 
+  const toggleAccount = (accountId: string | null) => {
+    setExpandedAccounts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(accountId)) {
+        newSet.delete(accountId);
+      } else {
+        newSet.add(accountId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse">
@@ -84,16 +97,38 @@ export default function OpportunityTable({ opportunities, accountNames, userName
         <tbody>
           {sortedGroups.map(([accountId, accountOpportunities]) => {
             const accountName = accountId ? (accountNames.get(accountId) || accountId) : 'No Account';
+            const isExpanded = expandedAccounts.has(accountId);
+            const accountKey = accountId || 'no-account';
             return (
-              <React.Fragment key={accountId || 'no-account'}>
+              <React.Fragment key={accountKey}>
                 {/* Account Header */}
                 <tr className="bg-gray-100 dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-600">
                   <td colSpan={4} className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white text-left">
-                    {accountName}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleAccount(accountId)}
+                        className="flex items-center justify-center w-5 h-5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                        title={isExpanded ? "Collapse" : "Expand"}
+                      >
+                        {isExpanded ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </button>
+                      <span>{accountName}</span>
+                      <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                        ({accountOpportunities.length})
+                      </span>
+                    </div>
                   </td>
                 </tr>
-                {/* Opportunities for this account */}
-                {accountOpportunities.map(opportunity => (
+                {/* Opportunities for this account - only show if expanded */}
+                {isExpanded && accountOpportunities.map(opportunity => (
                   <React.Fragment key={opportunity.id}>
                     {/* Row 1: Name, Close Date, Amount, Stage */}
                     <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5">
