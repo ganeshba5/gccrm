@@ -30,8 +30,8 @@ export default function OpportunityDashboard() {
   const [accountSearch, setAccountSearch] = useState<string>('');
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
-  const [dateFilterType, setDateFilterType] = useState<string>('all'); // 'all', 'month', 'quarter', 'year', 'custom'
-  const [dateFilterValue, setDateFilterValue] = useState<string>(''); // For month, quarter, year selections
+  const [dateFilterType, setDateFilterType] = useState<string>('year'); // 'all', 'month', 'quarter', 'year', 'custom'
+  const [dateFilterValue, setDateFilterValue] = useState<string>(new Date().getFullYear().toString()); // For month, quarter, year selections - default to current year
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const { user, loading: authLoading } = useAuth();

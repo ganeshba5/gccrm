@@ -239,8 +239,8 @@ export default function EditOpportunityModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex justify-center items-start z-50 overflow-y-auto pt-24 px-4" onClick={handleClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-lg w-full max-w-2xl mb-8 px-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 flex justify-center items-start z-50 overflow-y-auto pt-24 px-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-lg w-full max-w-2xl mb-8 px-4 sm:px-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Opportunity</h3>
           <div className="flex items-center gap-2">
