@@ -322,7 +322,7 @@ export default function OpportunityDashboard() {
                 );
                 setFilterAccount(match ? match.id : 'all');
               }}
-              onBlur={(e) => {
+              onBlur={() => {
                 // Close dropdown when input loses focus
                 // Use setTimeout to allow onClick to fire first
                 setTimeout(() => {
@@ -337,9 +337,6 @@ export default function OpportunityDashboard() {
                     setAccountSearch('');
                   }
                 }, 200);
-              }}
-              onFocus={() => {
-                // Show dropdown when focused if there's a search value
               }}
               placeholder="All Accounts"
               className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
@@ -392,16 +389,16 @@ export default function OpportunityDashboard() {
                 setOwnerSearch(value);
                 // Find matching user by display name
                 const match = Array.from(userNames.entries()).find(
-                  ([userId, displayName]) => displayName.toLowerCase() === value.toLowerCase()
+                  ([, displayName]) => displayName.toLowerCase() === value.toLowerCase()
                 );
                 setFilterOwner(match ? match[0] : 'all');
               }}
-              onBlur={(e) => {
+              onBlur={() => {
                 // Close dropdown when input loses focus
                 // Use setTimeout to allow onClick to fire first
                 setTimeout(() => {
                   const exactMatch = Array.from(userNames.entries()).find(
-                    ([userId, displayName]) => displayName.toLowerCase() === ownerSearch.toLowerCase()
+                    ([, displayName]) => displayName.toLowerCase() === ownerSearch.toLowerCase()
                   );
                   if (exactMatch) {
                     // Keep the search value if it matches
@@ -411,9 +408,6 @@ export default function OpportunityDashboard() {
                     setOwnerSearch('');
                   }
                 }, 200);
-              }}
-              onFocus={() => {
-                // Show dropdown when focused if there's a search value
               }}
               placeholder="All Owners"
               className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
@@ -435,7 +429,7 @@ export default function OpportunityDashboard() {
                   All Owners
                 </button>
                 {Array.from(userNames.entries())
-                  .filter(([userId, displayName]) =>
+                  .filter(([, displayName]) =>
                     displayName.toLowerCase().includes(ownerSearch.toLowerCase())
                   )
                   .slice(0, 20)
