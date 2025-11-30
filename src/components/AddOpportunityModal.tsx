@@ -5,6 +5,7 @@ import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
 import { useAuth } from '../context/AuthContext';
 import DatePicker from './DatePicker';
+import CreateAccountModal from './CreateAccountModal';
 
 export default function AddOpportunityModal({ 
   open, 
@@ -26,6 +27,7 @@ export default function AddOpportunityModal({
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -54,7 +56,28 @@ export default function AddOpportunityModal({
     setExpectedCloseDate('');
     setDescription('');
     setError(null);
+    setShowCreateAccount(false);
   };
+
+  const handleAccountCreated = async (newAccount: Account) => {
+    // Reload accounts list
+    try {
+      const accountsData = await accountService.getAll();
+      setAccounts(accountsData);
+      // Set the newly created account
+      setAccountSearch(newAccount.name);
+      setAccountId(newAccount.id);
+      setShowCreateAccount(false);
+    } catch (err) {
+      console.error('Error reloading accounts:', err);
+    }
+  };
+
+  // Check if account name doesn't exist
+  const accountExists = accounts.some(
+    (account) => account.name.toLowerCase() === accountSearch.toLowerCase()
+  );
+  const showCreateOption = accountSearch.trim() && !accountExists && accountSearch.length > 0;
 
   const handleClose = () => {
     resetForm();
@@ -226,6 +249,17 @@ export default function AddOpportunityModal({
                             {account.name}
                           </button>
                         ))}
+                      {showCreateOption && (
+                        <div className="border-t border-gray-200 dark:border-gray-700">
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 font-medium"
+                            onClick={() => setShowCreateAccount(true)}
+                          >
+                            + Create "{accountSearch}"
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -310,6 +344,12 @@ export default function AddOpportunityModal({
           </div>
         </form>
       </div>
+      <CreateAccountModal
+        open={showCreateAccount}
+        accountName={accountSearch}
+        onClose={() => setShowCreateAccount(false)}
+        onCreated={handleAccountCreated}
+      />
     </div>
   );
 }

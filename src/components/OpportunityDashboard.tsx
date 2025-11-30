@@ -4,6 +4,7 @@ import OpportunityTable from './OpportunityTable';
 // OpportunityProfilePanel removed - EditOpportunityModal is used instead
 import AddOpportunityModal from './AddOpportunityModal';
 import EditOpportunityModal from './EditOpportunityModal';
+import CreateAccountModal from './CreateAccountModal';
 import { useAuth } from '../context/AuthContext';
 import type { Opportunity } from '../types/opportunity';
 import type { Account } from '../types/account';
@@ -34,6 +35,7 @@ export default function OpportunityDashboard() {
   const [dateFilterValue, setDateFilterValue] = useState<string>(new Date().getFullYear().toString()); // For month, quarter, year selections - default to current year
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
   // Check for 'new' query parameter to open add modal
@@ -49,6 +51,10 @@ export default function OpportunityDashboard() {
   const fetchAccounts = async () => {
     try {
       if (!user) return;
+      
+      // Get all accounts (not just from opportunities) for the filter dropdown
+      const allAccounts = await accountService.getAll();
+      setAccounts(allAccounts);
       
       // Get all opportunities first (already filtered by owner for non-admin)
       const allOpportunities = await opportunityService.getAll();
@@ -80,12 +86,26 @@ export default function OpportunityDashboard() {
         }
       });
       
-      setAccounts(accountsData);
       setAccountNames(namesMap);
     } catch (err: any) {
       console.error('Error fetching accounts:', err);
     }
   };
+
+  const handleAccountCreated = async (newAccount: Account) => {
+    // Reload accounts list
+    await fetchAccounts();
+    // Set the newly created account as filter
+    setAccountSearch(newAccount.name);
+    setFilterAccount(newAccount.id);
+    setShowCreateAccount(false);
+  };
+
+  // Check if account name doesn't exist
+  const accountExists = accounts.some(
+    (account) => account.name.toLowerCase() === accountSearch.toLowerCase()
+  );
+  const showCreateOption = accountSearch.trim() && !accountExists && accountSearch.length > 0;
 
   const fetchUsers = async () => {
     try {
@@ -341,10 +361,10 @@ export default function OpportunityDashboard() {
               placeholder="All Accounts"
               className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
             />
-            {accountSearch && accounts.some(account => 
+            {accountSearch && (accounts.some(account => 
               account.name.toLowerCase().includes(accountSearch.toLowerCase()) &&
               account.name.toLowerCase() !== accountSearch.toLowerCase()
-            ) && (
+            ) || showCreateOption) && (
               <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
                 <button
                   type="button"
@@ -376,6 +396,20 @@ export default function OpportunityDashboard() {
                       {account.name}
                     </button>
                   ))}
+                {showCreateOption && (
+                  <div className="border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 font-medium"
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input blur
+                        setShowCreateAccount(true);
+                      }}
+                    >
+                      + Create "{accountSearch}"
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -578,6 +612,12 @@ export default function OpportunityDashboard() {
         }}
         onUpdate={handleEditUpdate}
         opportunity={opportunityToEdit}
+      />
+      <CreateAccountModal
+        open={showCreateAccount}
+        accountName={accountSearch}
+        onClose={() => setShowCreateAccount(false)}
+        onCreated={handleAccountCreated}
       />
     </div>
   );
