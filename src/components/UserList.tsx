@@ -105,7 +105,7 @@ export function UserList() {
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {filteredUsers.map((user) => (
               <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm font-medium text-gray-900 dark:text-white">
                     {user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email}
                   </div>
@@ -113,18 +113,18 @@ export function UserList() {
                     <div className="text-sm text-gray-500 dark:text-gray-400">{user.title}</div>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm text-gray-900 dark:text-white">{user.email}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleColor(user.role)}`}>
                     {user.role.replace('_', ' ')}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <div className="text-sm text-gray-500 dark:text-gray-400">{user.department || '-'}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-left">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                     user.isActive 
                       ? 'bg-success-100 text-success-800 dark:bg-success-900/20 dark:text-success-400'

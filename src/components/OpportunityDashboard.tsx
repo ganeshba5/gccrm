@@ -28,6 +28,8 @@ export default function OpportunityDashboard() {
   const [filterStage, setFilterStage] = useState<string>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
   const [accountSearch, setAccountSearch] = useState<string>('');
+  const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [dateFilterType, setDateFilterType] = useState<string>('all'); // 'all', 'month', 'quarter', 'year', 'custom'
   const [dateFilterValue, setDateFilterValue] = useState<string>(''); // For month, quarter, year selections
   const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -270,6 +272,9 @@ export default function OpportunityDashboard() {
     // Account filter
     if (filterAccount !== 'all' && opp.accountId !== filterAccount) return false;
     
+    // Owner filter
+    if (filterOwner !== 'all' && opp.owner !== filterOwner) return false;
+    
     // Date filter (filter by expectedCloseDate)
     if (dateFilterType !== 'all') {
       const { start, end } = getDateRange();
@@ -317,15 +322,38 @@ export default function OpportunityDashboard() {
                 );
                 setFilterAccount(match ? match.id : 'all');
               }}
+              onBlur={(e) => {
+                // Close dropdown when input loses focus
+                // Use setTimeout to allow onClick to fire first
+                setTimeout(() => {
+                  const exactMatch = accounts.find(
+                    (account) => account.name.toLowerCase() === accountSearch.toLowerCase()
+                  );
+                  if (exactMatch) {
+                    // Keep the search value if it matches
+                    setAccountSearch(exactMatch.name);
+                  } else if (filterAccount === 'all') {
+                    // Clear search if no account is selected
+                    setAccountSearch('');
+                  }
+                }, 200);
+              }}
+              onFocus={() => {
+                // Show dropdown when focused if there's a search value
+              }}
               placeholder="All Accounts"
               className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
             />
-            {accountSearch && (
+            {accountSearch && accounts.some(account => 
+              account.name.toLowerCase().includes(accountSearch.toLowerCase()) &&
+              account.name.toLowerCase() !== accountSearch.toLowerCase()
+            ) && (
               <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
                 <button
                   type="button"
                   className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  onClick={() => {
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevent input blur
                     setAccountSearch('');
                     setFilterAccount('all');
                   }}
@@ -342,12 +370,87 @@ export default function OpportunityDashboard() {
                       key={account.id}
                       type="button"
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      onClick={() => {
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input blur
                         setAccountSearch(account.name);
                         setFilterAccount(account.id);
                       }}
                     >
                       {account.name}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+          {/* Owner combo box */}
+          <div className="relative">
+            <input
+              type="text"
+              value={ownerSearch}
+              onChange={(e) => {
+                const value = e.target.value;
+                setOwnerSearch(value);
+                // Find matching user by display name
+                const match = Array.from(userNames.entries()).find(
+                  ([userId, displayName]) => displayName.toLowerCase() === value.toLowerCase()
+                );
+                setFilterOwner(match ? match[0] : 'all');
+              }}
+              onBlur={(e) => {
+                // Close dropdown when input loses focus
+                // Use setTimeout to allow onClick to fire first
+                setTimeout(() => {
+                  const exactMatch = Array.from(userNames.entries()).find(
+                    ([userId, displayName]) => displayName.toLowerCase() === ownerSearch.toLowerCase()
+                  );
+                  if (exactMatch) {
+                    // Keep the search value if it matches
+                    setOwnerSearch(exactMatch[1]);
+                  } else if (filterOwner === 'all') {
+                    // Clear search if no owner is selected
+                    setOwnerSearch('');
+                  }
+                }, 200);
+              }}
+              onFocus={() => {
+                // Show dropdown when focused if there's a search value
+              }}
+              placeholder="All Owners"
+              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
+            />
+            {ownerSearch && Array.from(userNames.values()).some(displayName => 
+              displayName.toLowerCase().includes(ownerSearch.toLowerCase()) &&
+              displayName.toLowerCase() !== ownerSearch.toLowerCase()
+            ) && (
+              <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevent input blur
+                    setOwnerSearch('');
+                    setFilterOwner('all');
+                  }}
+                >
+                  All Owners
+                </button>
+                {Array.from(userNames.entries())
+                  .filter(([userId, displayName]) =>
+                    displayName.toLowerCase().includes(ownerSearch.toLowerCase())
+                  )
+                  .slice(0, 20)
+                  .map(([userId, displayName]) => (
+                    <button
+                      key={userId}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input blur
+                        setOwnerSearch(displayName);
+                        setFilterOwner(userId);
+                      }}
+                    >
+                      {displayName}
                     </button>
                   ))}
               </div>
@@ -425,20 +528,17 @@ export default function OpportunityDashboard() {
               />
             </div>
           )}
-          <input
-            type="text"
-            placeholder="Search..."
-            className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-          />
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all') && (
+            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all' || filterOwner !== 'all') && (
               <button
                 onClick={() => {
                   setFilterStage('all');
                   setFilterAccount('all');
                   setAccountSearch('');
+                  setFilterOwner('all');
+                  setOwnerSearch('');
                   setDateFilterType('all');
                   setDateFilterValue('');
                   setCustomStartDate('');

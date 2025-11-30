@@ -5,7 +5,7 @@
  *   npx tsx scripts/import-excel.ts [excel-file-path]
  * 
  * Example:
- *   npx tsx scripts/import-excel.ts "data/Salesforce pipeline May 17 2023.xlsx"
+ *   npx tsx scripts/import-excel.ts "data/Opportunities 03-12-2024.xlsx"
  */
 
 import 'dotenv/config';
@@ -14,6 +14,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from './firebase-admin.js';
+import bcrypt from 'bcryptjs';
 
 interface ExcelRow {
   [key: string]: any;
@@ -41,6 +42,7 @@ interface ImportedOpportunity {
   expectedCloseDate?: Timestamp;
   description?: string;
   owner: string;
+  createdBy?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -59,8 +61,10 @@ const COLUMN_MAPPING = {
   amount: ['Amount', 'Value', 'Deal Amount', 'Revenue', 'Sales Amount'],
   stage: ['Stage', 'Status', 'Sales Stage', 'Opportunity Stage'],
   probability: ['Probability', 'Win Probability', '%'],
-  closeDate: ['Close Date', 'Expected Close Date', 'Close', 'Expected Close'],
+  closeDate: ['Close Date', 'Expected Close Date', 'Close', 'Expected Close', 'Created Date'],
   description: ['Description', 'Notes', 'Comments'],
+  nextStep: ['Next Step', 'Next Steps', 'Next Action', 'Action Item'],
+  createdDate: ['Created Date', 'Created', 'Date Created', 'Creation Date'],
   
   // Owner/Assigned fields
   owner: ['Owner', 'Assigned To', 'Sales Rep', 'Account Owner', 'Opportunity Owner'],
@@ -170,6 +174,128 @@ function parseDate(value: any): Date | undefined {
   return undefined;
 }
 
+/**
+ * Find existing opportunity by name (case-insensitive)
+ */
+async function findOpportunityByName(name: string): Promise<string | null> {
+  try {
+    const opportunitiesRef = db.collection('opportunities');
+    const snapshot = await opportunitiesRef.where('name', '==', name).get();
+    
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+    return null;
+  } catch (error) {
+    console.error(`Error finding opportunity "${name}":`, error);
+    return null;
+  }
+}
+
+/**
+ * Find or create user by owner name/email
+ * Returns user ID
+ */
+async function findOrCreateUser(ownerName: string): Promise<string> {
+  try {
+    const usersRef = db.collection('users');
+    
+    // Try to find by email first (if ownerName looks like an email)
+    if (ownerName.includes('@')) {
+      const emailSnapshot = await usersRef.where('email', '==', ownerName.toLowerCase().trim()).get();
+      if (!emailSnapshot.empty) {
+        return emailSnapshot.docs[0].id;
+      }
+    }
+    
+    // Try to find by displayName or firstName/lastName
+    const allUsersSnapshot = await usersRef.get();
+    for (const doc of allUsersSnapshot.docs) {
+      const userData = doc.data();
+      const displayName = userData.displayName || `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+      if (displayName.toLowerCase().trim() === ownerName.toLowerCase().trim()) {
+        return doc.id;
+      }
+    }
+    
+    // User doesn't exist, create one
+    console.log(`   Creating user for owner: ${ownerName}`);
+    
+    // Parse name into first and last name
+    let firstName = '';
+    let lastName = '';
+    let displayName = ownerName;
+    
+    if (ownerName.includes(' ')) {
+      const parts = ownerName.trim().split(/\s+/);
+      firstName = parts[0];
+      lastName = parts.slice(1).join(' ') || '';
+      displayName = ownerName;
+    } else if (ownerName.includes('.')) {
+      const parts = ownerName.split('.');
+      firstName = parts[0];
+      lastName = parts.slice(1).join('.') || '';
+      displayName = `${firstName} ${lastName}`;
+    } else if (ownerName.includes('_')) {
+      const parts = ownerName.split('_');
+      firstName = parts[0];
+      lastName = parts.slice(1).join('_') || '';
+      displayName = `${firstName} ${lastName}`;
+    } else {
+      firstName = ownerName;
+      lastName = '';
+      displayName = ownerName;
+    }
+    
+    // Generate email
+    let email = '';
+    if (ownerName.includes('@')) {
+      email = ownerName.toLowerCase().trim();
+    } else {
+      const emailBase = `${firstName.toLowerCase()}.${lastName.toLowerCase() || 'user'}`;
+      email = `${emailBase}@infoglobaltech.com`;
+      
+      // Check if email already exists
+      const existingEmails = new Set<string>();
+      allUsersSnapshot.forEach(doc => {
+        const userData = doc.data();
+        if (userData.email) {
+          existingEmails.add(userData.email.toLowerCase());
+        }
+      });
+      
+      let emailCounter = 1;
+      while (existingEmails.has(email.toLowerCase())) {
+        email = `${emailBase}${emailCounter}@infoglobaltech.com`;
+        emailCounter++;
+      }
+    }
+    
+    // Create user
+    const hashedPassword = await bcrypt.hash('Welcome@123', 10);
+    const now = Timestamp.now();
+    const userData = {
+      email: email.toLowerCase(),
+      displayName: displayName,
+      firstName: firstName || undefined,
+      lastName: lastName || undefined,
+      role: 'sales_rep',
+      isActive: true,
+      password: hashedPassword,
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    const docRef = await usersRef.add(userData);
+    console.log(`   ✅ Created user: ${email} (${displayName})`);
+    return docRef.id;
+  } catch (error: any) {
+    console.error(`Error finding/creating user for "${ownerName}":`, error.message);
+    // Return a default system user ID if creation fails
+    return 'system';
+  }
+}
+
 async function importExcel(filePath: string, defaultOwnerId: string = 'system') {
   console.log(`\n📊 Reading Excel file: ${filePath}\n`);
   
@@ -199,7 +325,7 @@ async function importExcel(filePath: string, defaultOwnerId: string = 'system') 
   
   // Create accounts map to avoid duplicates
   const accountsMap = new Map<string, { id: string; data: ImportedAccount }>();
-  const opportunities: ImportedOpportunity[] = [];
+  const opportunities: Array<ImportedOpportunity & { rowIndex: number; nextStep?: string; nextStepDate?: Date }> = [];
   
   const now = Timestamp.now();
   
@@ -256,6 +382,8 @@ async function importExcel(filePath: string, defaultOwnerId: string = 'system') 
       const probability = parseProbability(findColumnValue(row, COLUMN_MAPPING.probability));
       const closeDate = parseDate(findColumnValue(row, COLUMN_MAPPING.closeDate));
       const owner = findColumnValue(row, COLUMN_MAPPING.owner) || defaultOwnerId;
+      const nextStep = findColumnValue(row, COLUMN_MAPPING.nextStep);
+      const nextStepDate = parseDate(findColumnValue(row, COLUMN_MAPPING.createdDate));
       
       const opportunityData: any = {
         name: String(opportunityName),
@@ -273,7 +401,12 @@ async function importExcel(filePath: string, defaultOwnerId: string = 'system') 
       const description = findColumnValue(row, COLUMN_MAPPING.description);
       if (description) opportunityData.description = String(description);
       
-      opportunities.push(opportunityData);
+      opportunities.push({
+        ...opportunityData,
+        rowIndex: i,
+        nextStep: nextStep ? String(nextStep) : undefined,
+        nextStepDate: nextStepDate,
+      });
       
     } catch (error: any) {
       console.error(`❌ Error processing row ${i + 1}:`, error.message);
@@ -282,7 +415,7 @@ async function importExcel(filePath: string, defaultOwnerId: string = 'system') 
   
   console.log(`\n✅ Processed ${rows.length} rows`);
   console.log(`   📦 Accounts to create: ${accountsMap.size}`);
-  console.log(`   💼 Opportunities to create: ${opportunities.length}\n`);
+  console.log(`   💼 Opportunities to process: ${opportunities.length}\n`);
   
   // Import accounts
   console.log('📤 Importing accounts...');
@@ -291,27 +424,41 @@ async function importExcel(filePath: string, defaultOwnerId: string = 'system') 
   
   for (const [key, accountInfo] of accountsMap.entries()) {
     try {
-      const docRef = await accountRefs.add(accountInfo.data);
-      accountInfo.id = docRef.id;
-      accountsCreated++;
+      // Check if account already exists
+      const existingSnapshot = await accountRefs.where('name', '==', accountInfo.data.name).get();
+      if (!existingSnapshot.empty) {
+        accountInfo.id = existingSnapshot.docs[0].id;
+        // Update existing account
+        await accountRefs.doc(accountInfo.id).update({
+          ...accountInfo.data,
+          updatedAt: now,
+        });
+      } else {
+        const docRef = await accountRefs.add(accountInfo.data);
+        accountInfo.id = docRef.id;
+        accountsCreated++;
+      }
       if (accountsCreated % 10 === 0) {
         process.stdout.write('.');
       }
     } catch (error: any) {
-      console.error(`\n❌ Error creating account "${accountInfo.data.name}":`, error.message);
+      console.error(`\n❌ Error creating/updating account "${accountInfo.data.name}":`, error.message);
     }
   }
   
-  console.log(`\n✅ Created ${accountsCreated} accounts\n`);
+  console.log(`\n✅ Processed ${accountsMap.size} accounts (${accountsCreated} created)\n`);
   
-  // Import opportunities (link to accounts)
+  // Import opportunities (link to accounts and update/create)
   console.log('📤 Importing opportunities...');
   const opportunityRefs = db.collection('opportunities');
+  const notesRef = db.collection('notes');
   let opportunitiesCreated = 0;
+  let opportunitiesUpdated = 0;
+  let notesCreated = 0;
   
   for (let i = 0; i < opportunities.length; i++) {
     const opp = opportunities[i];
-    const row = rows[i];
+    const row = rows[opp.rowIndex];
     
     try {
       // Find the account ID for this opportunity
@@ -324,25 +471,102 @@ async function importExcel(filePath: string, defaultOwnerId: string = 'system') 
         }
       }
       
-      await opportunityRefs.add(opp);
-      opportunitiesCreated++;
-      if (opportunitiesCreated % 10 === 0) {
+      // Find or create user for owner
+      const ownerUserId = await findOrCreateUser(opp.owner);
+      opp.owner = ownerUserId;
+      if (!opp.createdBy) {
+        opp.createdBy = ownerUserId;
+      }
+      
+      // Extract nextStep data before saving opportunity (not part of opportunity schema)
+      const nextStep = opp.nextStep;
+      const nextStepDate = opp.nextStepDate;
+      
+      // Remove nextStep and nextStepDate from opportunity data
+      const { nextStep: _, nextStepDate: __, rowIndex: ___, ...opportunityData } = opp;
+      
+      // Check if opportunity already exists
+      const existingOppId = await findOpportunityByName(opp.name);
+      
+      let opportunityId: string;
+      if (existingOppId) {
+        // Update existing opportunity
+        const updateData: any = {
+          updatedAt: now,
+        };
+        
+        if (opportunityData.accountId !== undefined) updateData.accountId = opportunityData.accountId;
+        if (opportunityData.amount !== undefined) updateData.amount = opportunityData.amount;
+        if (opportunityData.stage !== undefined) updateData.stage = opportunityData.stage;
+        if (opportunityData.probability !== undefined) updateData.probability = opportunityData.probability;
+        if (opportunityData.expectedCloseDate !== undefined) updateData.expectedCloseDate = opportunityData.expectedCloseDate;
+        if (opportunityData.description !== undefined) updateData.description = opportunityData.description;
+        if (opportunityData.owner !== undefined) updateData.owner = opportunityData.owner;
+        
+        await opportunityRefs.doc(existingOppId).update(updateData);
+        opportunityId = existingOppId;
+        opportunitiesUpdated++;
+      } else {
+        // Create new opportunity (remove undefined fields)
+        const cleanOpportunityData: any = {
+          name: opportunityData.name,
+          stage: opportunityData.stage,
+          owner: opportunityData.owner,
+          createdAt: opportunityData.createdAt,
+          updatedAt: opportunityData.updatedAt,
+        };
+        
+        if (opportunityData.accountId) cleanOpportunityData.accountId = opportunityData.accountId;
+        if (opportunityData.amount !== undefined) cleanOpportunityData.amount = opportunityData.amount;
+        if (opportunityData.probability !== undefined) cleanOpportunityData.probability = opportunityData.probability;
+        if (opportunityData.expectedCloseDate) cleanOpportunityData.expectedCloseDate = opportunityData.expectedCloseDate;
+        if (opportunityData.description) cleanOpportunityData.description = opportunityData.description;
+        if (opportunityData.createdBy) cleanOpportunityData.createdBy = opportunityData.createdBy;
+        
+        const docRef = await opportunityRefs.add(cleanOpportunityData);
+        opportunityId = docRef.id;
+        opportunitiesCreated++;
+      }
+      
+      // Create note from Next Step if it exists
+      if (nextStep) {
+        const noteContent = `Next Step: ${nextStep}`;
+        const noteCreatedDate = nextStepDate ? Timestamp.fromDate(nextStepDate) : now;
+        
+        const noteData = {
+          content: noteContent,
+          opportunityId: opportunityId,
+          isPrivate: false, // Public note
+          createdBy: opportunityData.owner || ownerUserId,
+          createdAt: noteCreatedDate,
+          updatedAt: noteCreatedDate,
+        };
+        
+        await notesRef.add(noteData);
+        notesCreated++;
+      }
+      
+      if ((opportunitiesCreated + opportunitiesUpdated) % 10 === 0) {
         process.stdout.write('.');
       }
     } catch (error: any) {
-      console.error(`\n❌ Error creating opportunity "${opp.name}":`, error.message);
+      console.error(`\n❌ Error processing opportunity "${opp.name}":`, error.message);
     }
   }
   
-  console.log(`\n✅ Created ${opportunitiesCreated} opportunities\n`);
+  console.log(`\n✅ Processed ${opportunities.length} opportunities`);
+  console.log(`   Created: ${opportunitiesCreated}`);
+  console.log(`   Updated: ${opportunitiesUpdated}`);
+  console.log(`   Notes created: ${notesCreated}\n`);
   
   console.log('\n🎉 Import complete!');
-  console.log(`   📦 Accounts: ${accountsCreated}`);
-  console.log(`   💼 Opportunities: ${opportunitiesCreated}\n`);
+  console.log(`   📦 Accounts: ${accountsMap.size}`);
+  console.log(`   💼 Opportunities: ${opportunitiesCreated} created, ${opportunitiesUpdated} updated`);
+  console.log(`   📝 Notes: ${notesCreated} created\n`);
 }
 
 // Main execution
-const filePath = process.argv[2] || join(process.cwd(), 'data', 'Salesforce pipeline May 17 2023.xlsx');
+const filePath = process.argv[2] || join(process.cwd(), 'data', 'Opportunities 03-12-2024.xlsx');
 const defaultOwnerId = process.argv[3] || 'system';
 
 if (!existsSync(filePath)) {
@@ -359,4 +583,3 @@ importExcel(filePath, defaultOwnerId)
     console.error('\n❌ Import failed:', error);
     process.exit(1);
   });
-
