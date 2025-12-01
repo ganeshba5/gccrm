@@ -5,7 +5,7 @@ import type { Opportunity } from '../types/opportunity';
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
 import type { Account } from '../types/account';
-import DatePicker from './DatePicker';
+import NestedDateFilter from './NestedDateFilter';
 
 const COLORS = ['#465fff', '#12b76a', '#f79009', '#f04438', '#7a5af8', '#ee46bc'];
 
@@ -202,78 +202,28 @@ export default function Dashboard() {
       {/* Date Filter */}
       <div className="mb-4 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <select
-            value={dateFilterType}
-            onChange={(e) => {
-              setDateFilterType(e.target.value);
-              setDateFilterValue('');
-              setCustomStartDate('');
-              setCustomEndDate('');
+          <NestedDateFilter
+            dateFilterType={dateFilterType}
+            dateFilterValue={dateFilterValue}
+            onTypeChange={(type) => {
+              setDateFilterType(type);
+              if (type !== 'custom') {
+                setCustomStartDate('');
+                setCustomEndDate('');
+              }
+              if (type === 'all') {
+                setDateFilterValue('');
+              }
             }}
-            className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-          >
-            <option value="all">All Dates</option>
-            <option value="month">By Month</option>
-            <option value="quarter">By Quarter</option>
-            <option value="year">By Year</option>
-            <option value="custom">Custom Range</option>
-          </select>
-          {dateFilterType === 'month' && (
-            <select
-              value={dateFilterValue}
-              onChange={(e) => setDateFilterValue(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-            >
-              <option value="">Select Month</option>
-              {getMonthOptions().map(option => {
-                const [value, label] = option.split('|');
-                return <option key={value} value={value}>{label}</option>;
-              })}
-            </select>
-          )}
-          {dateFilterType === 'quarter' && (
-            <select
-              value={dateFilterValue}
-              onChange={(e) => setDateFilterValue(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-            >
-              <option value="">Select Quarter</option>
-              {getQuarterOptions().map(option => {
-                const [value, label] = option.split('|');
-                return <option key={value} value={value}>{label}</option>;
-              })}
-            </select>
-          )}
-          {dateFilterType === 'year' && (
-            <select
-              value={dateFilterValue}
-              onChange={(e) => setDateFilterValue(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-            >
-              <option value="">Select Year</option>
-              {getYearOptions().map(option => {
-                const [value, label] = option.split('|');
-                return <option key={value} value={value}>{label}</option>;
-              })}
-            </select>
-          )}
-          {dateFilterType === 'custom' && (
-            <div className="flex items-center gap-2">
-              <DatePicker
-                value={customStartDate}
-                onChange={setCustomStartDate}
-                placeholder="Start Date"
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-              />
-              <span className="text-gray-500 dark:text-gray-400">to</span>
-              <DatePicker
-                value={customEndDate}
-                onChange={setCustomEndDate}
-                placeholder="End Date"
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-              />
-            </div>
-          )}
+            onValueChange={setDateFilterValue}
+            getYearOptions={getYearOptions}
+            getQuarterOptions={getQuarterOptions}
+            getMonthOptions={getMonthOptions}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            onCustomStartDateChange={setCustomStartDate}
+            onCustomEndDateChange={setCustomEndDate}
+          />
           {dateFilterType !== 'all' && (
             <button
               onClick={() => {

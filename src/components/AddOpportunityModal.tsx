@@ -19,6 +19,7 @@ export default function AddOpportunityModal({
   const [name, setName] = useState('');
   const [accountId, setAccountId] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
+  const [accountFocused, setAccountFocused] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [amount, setAmount] = useState('');
   const [stage, setStage] = useState<Opportunity['stage']>('New');
@@ -215,11 +216,17 @@ export default function AddOpportunityModal({
                       );
                       setAccountId(match ? match.id : '');
                     }}
+                    onFocus={() => setAccountFocused(true)}
+                    onBlur={() => {
+                      setTimeout(() => setAccountFocused(false), 200);
+                    }}
                     placeholder="Search or select account"
                     className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
                     disabled={loading}
                   />
-                  {accountSearch && (
+                  {accountFocused && (accountSearch === '' || accounts.some(account => 
+                    account.name.toLowerCase().includes(accountSearch.toLowerCase())
+                  ) || showCreateOption) && (
                     <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
                       <button
                         type="button"
@@ -233,7 +240,7 @@ export default function AddOpportunityModal({
                       </button>
                       {accounts
                         .filter((account) =>
-                          account.name.toLowerCase().includes(accountSearch.toLowerCase())
+                          accountSearch === '' || account.name.toLowerCase().includes(accountSearch.toLowerCase())
                         )
                         .slice(0, 20)
                         .map((account) => (

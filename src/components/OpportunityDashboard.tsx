@@ -12,7 +12,7 @@ import type { Account } from '../types/account';
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
 import { userService } from '../services/userService';
-import DatePicker from './DatePicker';
+import NestedDateFilter from './NestedDateFilter';
 // canAccessAllData removed - not used in this component
 
 export default function OpportunityDashboard() {
@@ -29,8 +29,10 @@ export default function OpportunityDashboard() {
   const [filterStage, setFilterStage] = useState<string>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
   const [accountSearch, setAccountSearch] = useState<string>('');
+  const [accountFocused, setAccountFocused] = useState<boolean>(false);
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
+  const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
   const [dateFilterType, setDateFilterType] = useState<string>('year'); // 'all', 'month', 'quarter', 'year', 'custom'
   const [dateFilterValue, setDateFilterValue] = useState<string>(new Date().getFullYear().toString()); // For month, quarter, year selections - default to current year
   const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -342,10 +344,12 @@ export default function OpportunityDashboard() {
                 );
                 setFilterAccount(match ? match.id : 'all');
               }}
+              onFocus={() => setAccountFocused(true)}
               onBlur={() => {
                 // Close dropdown when input loses focus
                 // Use setTimeout to allow onClick to fire first
                 setTimeout(() => {
+                  setAccountFocused(false);
                   const exactMatch = accounts.find(
                     (account) => account.name.toLowerCase() === accountSearch.toLowerCase()
                   );
@@ -361,7 +365,7 @@ export default function OpportunityDashboard() {
               placeholder="All Accounts"
               className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
             />
-            {accountSearch && (accounts.some(account => 
+            {accountFocused && (accountSearch === '' || accounts.some(account => 
               account.name.toLowerCase().includes(accountSearch.toLowerCase()) &&
               account.name.toLowerCase() !== accountSearch.toLowerCase()
             ) || showCreateOption) && (
@@ -379,7 +383,7 @@ export default function OpportunityDashboard() {
                 </button>
                 {accounts
                   .filter((account) =>
-                    account.name.toLowerCase().includes(accountSearch.toLowerCase())
+                    accountSearch === '' || account.name.toLowerCase().includes(accountSearch.toLowerCase())
                   )
                   .slice(0, 20)
                   .map((account) => (
@@ -427,10 +431,12 @@ export default function OpportunityDashboard() {
                 );
                 setFilterOwner(match ? match[0] : 'all');
               }}
+              onFocus={() => setOwnerFocused(true)}
               onBlur={() => {
                 // Close dropdown when input loses focus
                 // Use setTimeout to allow onClick to fire first
                 setTimeout(() => {
+                  setOwnerFocused(false);
                   const exactMatch = Array.from(userNames.entries()).find(
                     ([, displayName]) => displayName.toLowerCase() === ownerSearch.toLowerCase()
                   );
@@ -446,10 +452,10 @@ export default function OpportunityDashboard() {
               placeholder="All Owners"
               className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
             />
-            {ownerSearch && Array.from(userNames.values()).some(displayName => 
+            {ownerFocused && (ownerSearch === '' || Array.from(userNames.values()).some(displayName => 
               displayName.toLowerCase().includes(ownerSearch.toLowerCase()) &&
               displayName.toLowerCase() !== ownerSearch.toLowerCase()
-            ) && (
+            )) && (
               <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
                 <button
                   type="button"
@@ -464,7 +470,7 @@ export default function OpportunityDashboard() {
                 </button>
                 {Array.from(userNames.entries())
                   .filter(([, displayName]) =>
-                    displayName.toLowerCase().includes(ownerSearch.toLowerCase())
+                    ownerSearch === '' || displayName.toLowerCase().includes(ownerSearch.toLowerCase())
                   )
                   .slice(0, 20)
                   .map(([userId, displayName]) => (
@@ -484,78 +490,28 @@ export default function OpportunityDashboard() {
               </div>
             )}
           </div>
-          <select
-            value={dateFilterType}
-            onChange={(e) => {
-              setDateFilterType(e.target.value);
-              setDateFilterValue('');
-              setCustomStartDate('');
-              setCustomEndDate('');
+          <NestedDateFilter
+            dateFilterType={dateFilterType}
+            dateFilterValue={dateFilterValue}
+            onTypeChange={(type) => {
+              setDateFilterType(type);
+              if (type !== 'custom') {
+                setCustomStartDate('');
+                setCustomEndDate('');
+              }
+              if (type === 'all') {
+                setDateFilterValue('');
+              }
             }}
-            className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-          >
-            <option value="all">All Dates</option>
-            <option value="month">By Month</option>
-            <option value="quarter">By Quarter</option>
-            <option value="year">By Year</option>
-            <option value="custom">Custom Range</option>
-          </select>
-          {dateFilterType === 'month' && (
-            <select
-              value={dateFilterValue}
-              onChange={(e) => setDateFilterValue(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-            >
-              <option value="">Select Month</option>
-              {getMonthOptions().map(option => {
-                const [value, label] = option.split('|');
-                return <option key={value} value={value}>{label}</option>;
-              })}
-            </select>
-          )}
-          {dateFilterType === 'quarter' && (
-            <select
-              value={dateFilterValue}
-              onChange={(e) => setDateFilterValue(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-            >
-              <option value="">Select Quarter</option>
-              {getQuarterOptions().map(option => {
-                const [value, label] = option.split('|');
-                return <option key={value} value={value}>{label}</option>;
-              })}
-            </select>
-          )}
-          {dateFilterType === 'year' && (
-            <select
-              value={dateFilterValue}
-              onChange={(e) => setDateFilterValue(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-            >
-              <option value="">Select Year</option>
-              {getYearOptions().map(option => {
-                const [value, label] = option.split('|');
-                return <option key={value} value={value}>{label}</option>;
-              })}
-            </select>
-          )}
-          {dateFilterType === 'custom' && (
-            <div className="flex items-center gap-2">
-              <DatePicker
-                value={customStartDate}
-                onChange={setCustomStartDate}
-                placeholder="Start Date"
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-              />
-              <span className="text-gray-500 dark:text-gray-400">to</span>
-              <DatePicker
-                value={customEndDate}
-                onChange={setCustomEndDate}
-                placeholder="End Date"
-                className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-              />
-            </div>
-          )}
+            onValueChange={setDateFilterValue}
+            getYearOptions={getYearOptions}
+            getQuarterOptions={getQuarterOptions}
+            getMonthOptions={getMonthOptions}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            onCustomStartDateChange={setCustomStartDate}
+            onCustomEndDateChange={setCustomEndDate}
+          />
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

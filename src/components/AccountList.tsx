@@ -14,6 +14,7 @@ export function AccountList() {
   const [error, setError] = useState<string | null>(null);
   const [accountEditPermissions, setAccountEditPermissions] = useState<Map<string, boolean>>(new Map());
   const [accountSearch, setAccountSearch] = useState<string>('');
+  const [accountFocused, setAccountFocused] = useState<boolean>(false);
 
   useEffect(() => {
     loadAccounts();
@@ -82,10 +83,16 @@ export function AccountList() {
             type="text"
             value={accountSearch}
             onChange={(e) => setAccountSearch(e.target.value)}
+            onFocus={() => setAccountFocused(true)}
+            onBlur={() => {
+              setTimeout(() => setAccountFocused(false), 200);
+            }}
             placeholder="Search Accounts"
             className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
           />
-          {accountSearch && (
+          {accountFocused && (accountSearch === '' || accounts.some(account => 
+            account.name.toLowerCase().includes(accountSearch.toLowerCase())
+          )) && (
             <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
               <button
                 type="button"
@@ -96,7 +103,7 @@ export function AccountList() {
               </button>
               {accounts
                 .filter((account) =>
-                  account.name.toLowerCase().includes(accountSearch.toLowerCase())
+                  accountSearch === '' || account.name.toLowerCase().includes(accountSearch.toLowerCase())
                 )
                 .slice(0, 20)
                 .map((account) => (

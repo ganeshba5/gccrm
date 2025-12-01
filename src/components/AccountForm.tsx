@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import type { AccountFormData } from '../types/account';
+import type { Note } from '../types/note';
+import type { User } from '../types/user';
 import { accountService } from '../services/accountService';
 import { opportunityService } from '../services/opportunityService';
+import { noteService } from '../services/noteService';
+import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
 
@@ -31,12 +35,38 @@ export function AccountForm() {
   const [isReadOnly, setIsReadOnly] = useState(isViewMode);
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(isViewMode ? 'View only mode' : null);
   const [, setAccount] = useState<any>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [users, setUsers] = useState<Map<string, User>>(new Map());
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (id) {
       loadAccount(id);
     }
   }, [id]);
+
+  useEffect(() => {
+    // Load users for displaying note creators
+    const loadUsers = async () => {
+      try {
+        const usersData = await userService.getAll();
+        const usersMap = new Map<string, User>();
+        usersData.forEach(u => usersMap.set(u.id, u));
+        setUsers(usersMap);
+      } catch (err) {
+        console.error('Error loading users:', err);
+      }
+    };
+    loadUsers();
+  }, []);
+
+  useEffect(() => {
+    // Load notes when account ID is available
+    if (id && user) {
+      loadNotes(id);
+    }
+  }, [id, user]);
 
   const loadAccount = async (accountId: string) => {
     try {
@@ -136,6 +166,64 @@ export function AccountForm() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const loadNotes = async (accountId: string) => {
+    if (!user) return;
+    
+    try {
+      setNotesLoading(true);
+      const allNotes = await noteService.getByAccount(accountId);
+      
+      // Filter: show public notes (isPrivate === false or undefined) or notes created by current user
+      const filteredNotes = allNotes.filter(note => 
+        !note.isPrivate || note.createdBy === user.id
+      );
+      
+      setNotes(filteredNotes);
+    } catch (err) {
+      console.error('Error loading notes:', err);
+      setNotes([]);
+    } finally {
+      setNotesLoading(false);
+    }
+  };
+
+  const getUserName = (userId: string): string => {
+    const userData = users.get(userId);
+    if (userData) {
+      return userData.displayName || 
+             (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : '') ||
+             userData.email;
+    }
+    return userId;
+  };
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const toggleNoteExpansion = (noteId: string) => {
+    setExpandedNotes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(noteId)) {
+        newSet.delete(noteId);
+      } else {
+        newSet.add(noteId);
+      }
+      return newSet;
+    });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 80): string => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
+  };
+
   if (loading && id) {
     return <div className="p-4">Loading account data...</div>;
   }
@@ -143,9 +231,28 @@ export function AccountForm() {
   return (
     <div className="p-6">
       <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-        <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">
-          {isViewMode ? 'View Account' : id ? 'Edit Account' : 'New Account'}
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
+            {isViewMode ? 'View Account' : id ? 'Edit Account' : 'New Account'}
+          </h2>
+          <div className="flex items-center gap-2">
+            <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Status:
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={formData.status}
+              onChange={handleInputChange}
+              disabled={isReadOnly}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed min-w-[120px]"
+            >
+              <option value="prospect">Prospect</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
 
         {error && (
           <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg text-error-700 text-sm dark:bg-error-900/20 dark:border-error-800 dark:text-error-400">
@@ -160,8 +267,9 @@ export function AccountForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {/* Account Name: Label and Field in 1 line */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
               Account Name *
             </label>
             <input
@@ -172,14 +280,15 @@ export function AccountForm() {
               onChange={handleInputChange}
               required
               disabled={isReadOnly}
-              className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
             />
           </div>
 
+          {/* Email, Phone: Label and Field in 1 line */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Email
+            <div className="flex items-center gap-2">
+              <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Email:
               </label>
               <input
                 type="email"
@@ -188,13 +297,13 @@ export function AccountForm() {
                 value={formData.email || ''}
                 onChange={handleInputChange}
                 disabled={isReadOnly}
-                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
 
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Phone
+            <div className="flex items-center gap-2">
+              <label htmlFor="phone" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Phone:
               </label>
               <input
                 type="tel"
@@ -203,13 +312,16 @@ export function AccountForm() {
                 value={formData.phone || ''}
                 onChange={handleInputChange}
                 disabled={isReadOnly}
-                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
+          </div>
 
-            <div>
-              <label htmlFor="website" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Website
+          {/* Website, Industry: Labels and fields spread out */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="website" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Website:
               </label>
               <input
                 type="url"
@@ -218,13 +330,13 @@ export function AccountForm() {
                 value={formData.website || ''}
                 onChange={handleInputChange}
                 disabled={isReadOnly}
-                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
 
-            <div>
-              <label htmlFor="industry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Industry
+            <div className="flex items-center gap-2">
+              <label htmlFor="industry" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Industry:
               </label>
               <input
                 type="text"
@@ -233,31 +345,14 @@ export function AccountForm() {
                 value={formData.industry || ''}
                 onChange={handleInputChange}
                 disabled={isReadOnly}
-                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
           </div>
 
+          {/* Description: Label left aligned */}
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Status
-            </label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              disabled={isReadOnly}
-              className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
-            >
-              <option value="prospect">Prospect</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left mb-1">
               Description
             </label>
             <textarea
@@ -267,7 +362,7 @@ export function AccountForm() {
               onChange={handleInputChange}
               rows={4}
               disabled={isReadOnly}
-              className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -288,6 +383,91 @@ export function AccountForm() {
             </button>
           </div>
         </form>
+
+        {/* Notes Section - only show when editing existing account */}
+        {id && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h4 className="text-md font-medium mb-3 text-gray-900 dark:text-white text-left">Notes</h4>
+            
+            {notesLoading ? (
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                Loading notes...
+              </div>
+            ) : notes.length === 0 ? (
+              <div className="text-center py-3 text-gray-500 dark:text-gray-400 text-sm">
+                No notes found
+              </div>
+            ) : (
+              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
+                {/* Grid Header */}
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
+                  <div className="col-span-3">Created By</div>
+                  <div className="col-span-5">Content</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-1">Status</div>
+                  <div className="col-span-1"></div>
+                </div>
+                {/* Grid Rows */}
+                <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                  {notes.map((note) => {
+                    const isExpanded = expandedNotes.has(note.id);
+                    const contentIsLong = note.content.length > 80;
+                    const displayContent = isExpanded || !contentIsLong 
+                      ? note.content 
+                      : truncateContent(note.content, 80);
+                    
+                    return (
+                      <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
+                        <div className="col-span-3">
+                          <span className="text-xs text-gray-900 dark:text-white truncate block">
+                            {getUserName(note.createdBy)}
+                          </span>
+                        </div>
+                        <div className="col-span-5">
+                          <div className="flex items-center gap-1">
+                            <span className={`text-xs text-gray-700 dark:text-gray-300 ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
+                              {displayContent}
+                            </span>
+                            {contentIsLong && (
+                              <button
+                                onClick={() => toggleNoteExpansion(note.id)}
+                                className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center"
+                                title={isExpanded ? "Show less" : "Show more"}
+                              >
+                                {isExpanded ? (
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            {formatDate(note.createdAt)}
+                          </span>
+                        </div>
+                        <div className="col-span-1">
+                          {note.isPrivate && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded whitespace-nowrap">
+                              Private
+                            </span>
+                          )}
+                        </div>
+                        <div className="col-span-1"></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
