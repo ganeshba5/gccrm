@@ -49,6 +49,7 @@ export default function EditOpportunityModal({
   const [editIsPrivate, setEditIsPrivate] = useState(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [isCreatingContact, setIsCreatingContact] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteIsPrivate, setNewNoteIsPrivate] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -57,6 +58,15 @@ export default function EditOpportunityModal({
     status: 'not_started' as Task['status'],
     priority: 'medium' as Task['priority'],
     dueDate: '',
+  });
+  const [newContact, setNewContact] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    mobile: '',
+    title: '',
+    department: '',
   });
   const { user } = useAuth();
 
@@ -289,6 +299,39 @@ export default function EditOpportunityModal({
     } catch (err) {
       setError('Failed to create task');
       console.error('Error creating task:', err);
+    }
+  };
+
+  const handleCreateContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !opportunity?.accountId || !newContact.firstName.trim() || !newContact.lastName.trim()) return;
+
+    try {
+      setError(null);
+      await contactService.create({
+        firstName: newContact.firstName.trim(),
+        lastName: newContact.lastName.trim(),
+        accountId: opportunity.accountId,
+        email: newContact.email.trim() || undefined,
+        phone: newContact.phone.trim() || undefined,
+        mobile: newContact.mobile.trim() || undefined,
+        title: newContact.title.trim() || undefined,
+        department: newContact.department.trim() || undefined,
+      }, user.id);
+      setNewContact({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        mobile: '',
+        title: '',
+        department: '',
+      });
+      setIsCreatingContact(false);
+      await loadContacts(opportunity.accountId);
+    } catch (err) {
+      setError('Failed to create contact');
+      console.error('Error creating contact:', err);
     }
   };
 
@@ -588,6 +631,17 @@ export default function EditOpportunityModal({
                 onClick={() => setIsCreatingTask(true)}
                 className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
                 title="Create new task"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            )}
+            {activeTab === 'contacts' && opportunity?.accountId && !isCreatingContact && (
+              <button
+                onClick={() => setIsCreatingContact(true)}
+                className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                title="Create new contact"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -988,6 +1042,124 @@ export default function EditOpportunityModal({
           {/* Contacts Tab Content */}
           {activeTab === 'contacts' && opportunity?.accountId && (
             <>
+              {isCreatingContact && (
+                <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-900/10 border border-brand-200 dark:border-brand-800 rounded-lg">
+                  <form onSubmit={handleCreateContact} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          First Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={newContact.firstName}
+                          onChange={(e) => setNewContact({ ...newContact, firstName: e.target.value })}
+                          required
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Last Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={newContact.lastName}
+                          onChange={(e) => setNewContact({ ...newContact, lastName: e.target.value })}
+                          required
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={newContact.email}
+                          onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Phone
+                        </label>
+                        <input
+                          type="tel"
+                          value={newContact.phone}
+                          onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Mobile
+                        </label>
+                        <input
+                          type="tel"
+                          value={newContact.mobile}
+                          onChange={(e) => setNewContact({ ...newContact, mobile: e.target.value })}
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          value={newContact.title}
+                          onChange={(e) => setNewContact({ ...newContact, title: e.target.value })}
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Department
+                      </label>
+                      <input
+                        type="text"
+                        value={newContact.department}
+                        onChange={(e) => setNewContact({ ...newContact, department: e.target.value })}
+                        className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"></div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreatingContact(false);
+                          setNewContact({
+                            firstName: '',
+                            lastName: '',
+                            email: '',
+                            phone: '',
+                            mobile: '',
+                            title: '',
+                            department: '',
+                          });
+                        }}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
+                      >
+                        Create Contact
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
               {contactsLoading ? (
                 <div className="text-center py-4 text-gray-500 dark:text-gray-400">
                   Loading contacts...
