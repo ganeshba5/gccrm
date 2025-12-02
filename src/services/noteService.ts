@@ -16,7 +16,7 @@ import {
 import { db } from '../lib/firebase';
 import { ensureAuthenticated } from '../lib/firebase-helpers';
 import { getCurrentUser, canAccessAllData } from '../lib/auth-helpers';
-import type { Note, NoteFormData } from '../types/note';
+import type { Note, NoteFormData, NoteAttachment } from '../types/note';
 
 class NoteService {
   private readonly db: Firestore;
@@ -44,6 +44,16 @@ class NoteService {
       if (data.contactId) noteData.contactId = data.contactId;
       if (data.opportunityId) noteData.opportunityId = data.opportunityId;
       if (data.isPrivate !== undefined) noteData.isPrivate = data.isPrivate;
+      if (data.attachments && data.attachments.length > 0) {
+        noteData.attachments = data.attachments.map(att => ({
+          id: att.id,
+          name: att.name,
+          url: att.url,
+          size: att.size,
+          type: att.type,
+          uploadedAt: Timestamp.fromDate(att.uploadedAt),
+        }));
+      }
       
       const docRef = await addDoc(this.notesRef, noteData);
       return docRef.id;
@@ -68,6 +78,20 @@ class NoteService {
       if (data.contactId !== undefined) updateData.contactId = data.contactId || null;
       if (data.opportunityId !== undefined) updateData.opportunityId = data.opportunityId || null;
       if (data.isPrivate !== undefined) updateData.isPrivate = data.isPrivate;
+      if (data.attachments !== undefined) {
+        if (data.attachments.length > 0) {
+          updateData.attachments = data.attachments.map(att => ({
+            id: att.id,
+            name: att.name,
+            url: att.url,
+            size: att.size,
+            type: att.type,
+            uploadedAt: Timestamp.fromDate(att.uploadedAt),
+          }));
+        } else {
+          updateData.attachments = null;
+        }
+      }
       
       await updateDoc(docRef, updateData);
     } catch (error) {
@@ -269,9 +293,24 @@ class NoteService {
 
   private convertToNote(doc: DocumentSnapshot): Note {
     const data = doc.data();
+    
+    // Convert attachments from Firestore format to NoteAttachment[]
+    let attachments: NoteAttachment[] | undefined;
+    if (data?.attachments && Array.isArray(data.attachments)) {
+      attachments = data.attachments.map((att: any) => ({
+        id: att.id,
+        name: att.name,
+        url: att.url,
+        size: att.size,
+        type: att.type,
+        uploadedAt: att.uploadedAt?.toDate ? att.uploadedAt.toDate() : new Date(att.uploadedAt),
+      }));
+    }
+    
     return {
       id: doc.id,
       content: data?.content ?? '',
+      attachments,
       accountId: data?.accountId,
       contactId: data?.contactId,
       opportunityId: data?.opportunityId,

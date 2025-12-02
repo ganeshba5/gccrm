@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 // Log environment variables availability
 console.log('Firebase Config Environment Variables Status:', {
@@ -81,8 +82,19 @@ try {
   throw error;
 }
 
-export { app, auth, db };
+// Initialize Firebase Storage
+let storage: FirebaseStorage;
+try {
+  storage = getStorage(app);
+  console.log('Firebase Storage initialized successfully');
+} catch (error) {
+  console.error('Error initializing Firebase Storage:', error);
+  throw error;
+}
+
+export { app, auth, db, storage };
 export type { FirebaseApp } from 'firebase/app';
 export type { Auth } from 'firebase/auth';
 export type { Firestore } from 'firebase/firestore';
+export type { FirebaseStorage } from 'firebase/storage';
 export default app;

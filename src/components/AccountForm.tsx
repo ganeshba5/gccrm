@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import type { AccountFormData } from '../types/account';
-import type { Note } from '../types/note';
+import type { Note, NoteAttachment } from '../types/note';
 import type { Task } from '../types/task';
 import type { Contact } from '../types/contact';
 import type { Opportunity } from '../types/opportunity';
@@ -15,6 +15,8 @@ import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
 import DatePicker from './DatePicker';
+import { RichTextEditor } from './RichTextEditor';
+import { NoteContent } from './NoteContent';
 
 const initialFormData: AccountFormData = {
   name: '',
@@ -57,11 +59,13 @@ export function AccountForm() {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState('');
+  const [editNoteAttachments, setEditNoteAttachments] = useState<NoteAttachment[]>([]);
   const [editIsPrivate, setEditIsPrivate] = useState(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [isCreatingContact, setIsCreatingContact] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteAttachments, setNewNoteAttachments] = useState<NoteAttachment[]>([]);
   const [newNoteIsPrivate, setNewNoteIsPrivate] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
@@ -307,21 +311,26 @@ export function AccountForm() {
   const handleEditNote = (note: Note) => {
     setEditingNoteId(note.id);
     setEditNoteContent(note.content);
+    setEditNoteAttachments(note.attachments || []);
     setEditIsPrivate(note.isPrivate || false);
   };
 
   const handleUpdateNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingNoteId || !editNoteContent.trim() || !user) return;
+    // Check if content has meaningful text (strip HTML tags for validation)
+    const textContent = editNoteContent.replace(/<[^>]*>/g, '').trim();
+    if (!editingNoteId || (!textContent && editNoteAttachments.length === 0) || !user) return;
 
     try {
       setError(null);
       await noteService.update(editingNoteId, {
-        content: editNoteContent.trim(),
+        content: editNoteContent,
+        attachments: editNoteAttachments.length > 0 ? editNoteAttachments : undefined,
         isPrivate: editIsPrivate,
       });
       setEditingNoteId(null);
       setEditNoteContent('');
+      setEditNoteAttachments([]);
       setEditIsPrivate(false);
       await loadNotes(id!);
     } catch (err) {
@@ -333,6 +342,7 @@ export function AccountForm() {
   const handleCancelEdit = () => {
     setEditingNoteId(null);
     setEditNoteContent('');
+    setEditNoteAttachments([]);
     setEditIsPrivate(false);
   };
 
@@ -350,16 +360,20 @@ export function AccountForm() {
 
   const handleCreateNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !id || !newNoteContent.trim()) return;
+    // Check if content has meaningful text (strip HTML tags for validation)
+    const textContent = newNoteContent.replace(/<[^>]*>/g, '').trim();
+    if (!user || !id || (!textContent && newNoteAttachments.length === 0)) return;
 
     try {
       setError(null);
       await noteService.create({
-        content: newNoteContent.trim(),
+        content: newNoteContent,
+        attachments: newNoteAttachments.length > 0 ? newNoteAttachments : undefined,
         accountId: id,
         isPrivate: newNoteIsPrivate,
       }, user.id);
       setNewNoteContent('');
+      setNewNoteAttachments([]);
       setNewNoteIsPrivate(false);
       setIsCreatingNote(false);
       await loadNotes(id);
@@ -696,12 +710,11 @@ export function AccountForm() {
                 {isCreatingNote && (
                   <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-900/10 border border-brand-200 dark:border-brand-800 rounded-lg">
                     <form onSubmit={handleCreateNote} className="space-y-3">
-                      <textarea
+                      <RichTextEditor
                         value={newNoteContent}
-                        onChange={(e) => setNewNoteContent(e.target.value)}
-                        rows={4}
-                        required
-                        className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        onChange={setNewNoteContent}
+                        attachments={newNoteAttachments}
+                        onAttachmentsChange={setNewNoteAttachments}
                         placeholder="Enter your note here..."
                       />
                       <div className="flex items-center gap-2">
@@ -721,6 +734,7 @@ export function AccountForm() {
                           onClick={() => {
                             setIsCreatingNote(false);
                             setNewNoteContent('');
+                            setNewNoteAttachments([]);
                             setNewNoteIsPrivate(false);
                           }}
                           className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -760,19 +774,17 @@ export function AccountForm() {
                 <div className="divide-y divide-gray-200 dark:divide-gray-600">
                   {notes.map((note) => {
                     const isExpanded = expandedNotes.has(note.id);
-                    const contentIsLong = note.content.length > 80;
                     const isEditing = editingNoteId === note.id;
                     
                     if (isEditing) {
                       return (
                         <div key={note.id} className="px-3 py-3 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500">
                           <form onSubmit={handleUpdateNote} className="space-y-2">
-                            <textarea
+                            <RichTextEditor
                               value={editNoteContent}
-                              onChange={(e) => setEditNoteContent(e.target.value)}
-                              rows={3}
-                              required
-                              className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                              onChange={setEditNoteContent}
+                              attachments={editNoteAttachments}
+                              onAttachmentsChange={setEditNoteAttachments}
                               placeholder="Enter your note here..."
                             />
                             <div className="flex items-center gap-2">
@@ -805,41 +817,22 @@ export function AccountForm() {
                         </div>
                       );
                     }
-
-                    const displayContent = isExpanded || !contentIsLong 
-                      ? note.content 
-                      : truncateContent(note.content, 80);
                     
                     return (
-                      <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
+                      <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-start">
                         <div className="col-span-3">
                           <span className="text-xs text-gray-900 dark:text-white truncate block">
                             {getUserName(note.createdBy)}
                           </span>
                         </div>
                         <div className="col-span-4">
-                          <div className="flex items-center gap-1">
-                            <span className={`text-xs text-gray-700 dark:text-gray-300 ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
-                              {displayContent}
-                            </span>
-                            {contentIsLong && (
-                              <button
-                                onClick={() => toggleNoteExpansion(note.id)}
-                                className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center"
-                                title={isExpanded ? "Show less" : "Show more"}
-                              >
-                                {isExpanded ? (
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                )}
-                              </button>
-                            )}
-                          </div>
+                          <NoteContent
+                            content={note.content}
+                            attachments={note.attachments}
+                            maxLength={80}
+                            showFull={isExpanded}
+                            onToggleExpand={() => toggleNoteExpansion(note.id)}
+                          />
                         </div>
                         <div className="col-span-2">
                           <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { NoteFormData } from '../types/note';
+import type { NoteFormData, NoteAttachment } from '../types/note';
 import { noteService } from '../services/noteService';
 import { accountService } from '../services/accountService';
 import { contactService } from '../services/contactService';
@@ -9,6 +9,7 @@ import type { Account } from '../types/account';
 import type { Contact } from '../types/contact';
 import type { Opportunity } from '../types/opportunity';
 import { useAuth } from '../context/AuthContext';
+import { RichTextEditor } from './RichTextEditor';
 
 const initialFormData: NoteFormData = {
   content: '',
@@ -23,6 +24,7 @@ export function NoteForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [formData, setFormData] = useState<NoteFormData>(initialFormData);
+  const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -77,6 +79,7 @@ export function NoteForm() {
           opportunityId: note.opportunityId || '',
           isPrivate: note.isPrivate || false,
         });
+        setAttachments(note.attachments || []);
       }
     } catch (err) {
       setError('Failed to load note');
@@ -97,8 +100,10 @@ export function NoteForm() {
       return;
     }
 
-    if (!formData.content.trim()) {
-      setError('Note content is required');
+    // Check if content has meaningful text (strip HTML tags for validation)
+    const textContent = formData.content.replace(/<[^>]*>/g, '').trim();
+    if (!textContent && attachments.length === 0) {
+      setError('Note content or attachment is required');
       setLoading(false);
       return;
     }
@@ -106,6 +111,7 @@ export function NoteForm() {
     try {
       const submitData = {
         ...formData,
+        attachments: attachments.length > 0 ? attachments : undefined,
         accountId: formData.accountId || undefined,
         contactId: formData.contactId || undefined,
         opportunityId: formData.opportunityId || undefined,
@@ -173,17 +179,15 @@ export function NoteForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Content *
             </label>
-            <textarea
-              id="content"
-              name="content"
+            <RichTextEditor
               value={formData.content}
-              onChange={handleInputChange}
-              required
-              rows={8}
-              className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+              onChange={(value) => setFormData({ ...formData, content: value })}
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+              placeholder="Enter your note here... You can format text, add links, images, and attach files."
             />
           </div>
 
