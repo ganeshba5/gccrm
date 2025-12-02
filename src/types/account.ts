@@ -1,3 +1,9 @@
+// Shared user with permission
+export interface SharedUser {
+  userId: string;                    // User UID
+  permission: 'view' | 'edit';      // Permission level
+}
+
 // Account (formerly Customer)
 export interface Account {
   id: string;
@@ -23,6 +29,7 @@ export interface Account {
   status: 'active' | 'inactive' | 'prospect';
   description?: string;               // Account description
   assignedTo?: string;                // User UID of assigned sales rep
+  sharedUsers?: SharedUser[];         // List of users with shared access
   createdBy: string;                 // User UID who created the account
   createdAt: Date;
   updatedAt: Date;

@@ -1,3 +1,5 @@
+import type { SharedUser } from './account';
+
 // Opportunity (formerly Lead)
 export type Opportunity = {
   id: string;
@@ -9,6 +11,7 @@ export type Opportunity = {
   expectedCloseDate?: Date;         // Expected close date
   description?: string;              // Opportunity description
   owner: string;                     // User UID who owns the opportunity
+  sharedUsers?: SharedUser[];        // List of users with shared access
   createdBy: string;                // User UID who created the opportunity
   createdAt: Date;
   updatedAt: Date;

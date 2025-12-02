@@ -4,6 +4,7 @@ import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import TextAlign from '@tiptap/extension-text-align';
 import { useState, useRef, useEffect } from 'react';
 import type { NoteAttachment } from '../types/note';
 import { storageService } from '../services/storageService';
@@ -49,6 +50,9 @@ export function RichTextEditor({
       }),
       TextStyle,
       Color,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
     ],
     content: value,
     editable: !readOnly,
@@ -265,6 +269,55 @@ export function RichTextEditor({
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+            </svg>
+          </button>
+          <div className="border-l border-gray-300 dark:border-gray-600 mx-1" />
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+              editor.isActive({ textAlign: 'left' }) ? 'bg-gray-200 dark:bg-gray-600' : ''
+            }`}
+            title="Align Left"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h12M3 14h12M3 6h12M3 18h12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+              editor.isActive({ textAlign: 'center' }) ? 'bg-gray-200 dark:bg-gray-600' : ''
+            }`}
+            title="Align Center"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 10h12M6 14h12M6 6h12M6 18h12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+              editor.isActive({ textAlign: 'right' }) ? 'bg-gray-200 dark:bg-gray-600' : ''
+            }`}
+            title="Align Right"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h12M9 14h12M9 6h12M9 18h12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+            className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+              editor.isActive({ textAlign: 'justify' }) ? 'bg-gray-200 dark:bg-gray-600' : ''
+            }`}
+            title="Justify"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18" />
             </svg>
           </button>
           <div className="border-l border-gray-300 dark:border-gray-600 mx-1" />

@@ -50,6 +50,7 @@ class AccountService {
       if (data.description) accountData.description = data.description;
       if (data.assignedTo) accountData.assignedTo = data.assignedTo;
       if (data.lastContact) accountData.lastContact = Timestamp.fromDate(data.lastContact);
+      if (data.sharedUsers && data.sharedUsers.length > 0) accountData.sharedUsers = data.sharedUsers;
       
       const docRef = await addDoc(this.accountsRef, accountData);
       return docRef.id;
@@ -75,9 +76,12 @@ class AccountService {
         throw new Error('Account not found');
       }
 
-      // Non-admin users can only update accounts they created
+      // Non-admin users can only update accounts they created or have edit permission via sharing
       if (!isAdmin && account.createdBy !== currentUser.id) {
-        throw new Error('You can only edit accounts you created');
+        const sharedUser = account.sharedUsers?.find(su => su.userId === currentUser.id);
+        if (!sharedUser || sharedUser.permission !== 'edit') {
+          throw new Error('You do not have permission to edit this account');
+        }
       }
 
       const docRef = doc(this.db, this.collectionName, id);
@@ -99,6 +103,7 @@ class AccountService {
       if (data.description !== undefined) updateData.description = data.description || null;
       if (data.assignedTo !== undefined) updateData.assignedTo = data.assignedTo || null;
       if (data.lastContact !== undefined) updateData.lastContact = data.lastContact ? Timestamp.fromDate(data.lastContact) : null;
+      if (data.sharedUsers !== undefined) updateData.sharedUsers = data.sharedUsers || null;
       
       await updateDoc(docRef, updateData);
     } catch (error) {
@@ -156,6 +161,7 @@ class AccountService {
           // Non-admin users can see:
           // 1. Accounts they created
           // 2. Accounts linked to opportunities they own
+          // 3. Accounts shared with them (view or edit permission)
           
           // First, get accounts they created
           const createdAccountsQuery = query(
@@ -175,14 +181,26 @@ class AccountService {
               .map(opp => opp.accountId!)
           );
           
-          // Combine both sets of account IDs
-          const allAccountIds = new Set([...createdAccountIds, ...linkedAccountIds]);
+          // Get accounts shared with the user
+          // We need to fetch all accounts and filter in memory since Firestore doesn't support array-contains queries on nested fields easily
+          const allAccountsSnapshot = await getDocs(this.accountsRef);
+          const sharedAccountIds = new Set(
+            allAccountsSnapshot.docs
+              .filter(doc => {
+                const data = doc.data();
+                const sharedUsers = data?.sharedUsers || [];
+                return sharedUsers.some((su: any) => su.userId === currentUser.id);
+              })
+              .map(doc => doc.id)
+          );
+          
+          // Combine all sets of account IDs
+          const allAccountIds = new Set([...createdAccountIds, ...linkedAccountIds, ...sharedAccountIds]);
           
           if (allAccountIds.size === 0) {
             docs = [];
           } else {
-            // Fetch all accounts (we'll filter in memory since Firestore 'in' query is limited to 10)
-            const allAccountsSnapshot = await getDocs(this.accountsRef);
+            // Filter accounts by the combined set
             docs = allAccountsSnapshot.docs.filter(doc => allAccountIds.has(doc.id));
           }
         }
@@ -209,7 +227,19 @@ class AccountService {
               .map(opp => opp.accountId!)
           );
           
-          const allAccountIds = new Set([...createdAccountIds, ...linkedAccountIds]);
+          // Get accounts shared with the user
+          const allAccountsSnapshot = await getDocs(this.accountsRef);
+          const sharedAccountIds = new Set(
+            allAccountsSnapshot.docs
+              .filter(doc => {
+                const data = doc.data();
+                const sharedUsers = data?.sharedUsers || [];
+                return sharedUsers.some((su: any) => su.userId === currentUser.id);
+              })
+              .map(doc => doc.id)
+          );
+          
+          const allAccountIds = new Set([...createdAccountIds, ...linkedAccountIds, ...sharedAccountIds]);
           
           if (allAccountIds.size === 0) {
             docs = [];
@@ -286,6 +316,7 @@ class AccountService {
       status: data?.status ?? 'prospect',
       description: data?.description,
       assignedTo: data?.assignedTo,
+      sharedUsers: data?.sharedUsers || undefined,
       createdBy: data?.createdBy ?? '',
       createdAt: (data?.createdAt as Timestamp).toDate(),
       updatedAt: (data?.updatedAt as Timestamp).toDate(),

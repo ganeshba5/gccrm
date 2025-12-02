@@ -746,6 +746,7 @@ export function ContactForm() {
                             maxLength={80}
                             showFull={isExpanded}
                             onToggleExpand={() => toggleNoteExpansion(note.id)}
+                            viewOnly={false}
                           />
                         </div>
                         <div className="col-span-2">

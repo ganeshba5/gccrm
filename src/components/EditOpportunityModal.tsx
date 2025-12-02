@@ -14,6 +14,9 @@ import { useAuth } from '../context/AuthContext';
 import DatePicker from './DatePicker';
 import { RichTextEditor } from './RichTextEditor';
 import { NoteContent } from './NoteContent';
+import { SharedUsersManager } from './SharedUsersManager';
+import type { SharedUser } from '../types/account';
+import { canAccessAllData } from '../lib/auth-helpers';
 
 export default function EditOpportunityModal({ 
   open, 
@@ -33,6 +36,8 @@ export default function EditOpportunityModal({
   const [probability, setProbability] = useState('');
   const [expectedCloseDate, setExpectedCloseDate] = useState('');
   const [description, setDescription] = useState('');
+  const [sharedUsers, setSharedUsers] = useState<SharedUser[]>([]);
+  const [canManageSharedUsers, setCanManageSharedUsers] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
@@ -47,6 +52,7 @@ export default function EditOpportunityModal({
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [viewingNoteId, setViewingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editNoteAttachments, setEditNoteAttachments] = useState<NoteAttachment[]>([]);
   const [editIsPrivate, setEditIsPrivate] = useState(false);
@@ -83,6 +89,17 @@ export default function EditOpportunityModal({
       setProbability(opportunity.probability?.toString() || '');
       setExpectedCloseDate(opportunity.expectedCloseDate ? opportunity.expectedCloseDate.toISOString().split('T')[0] : '');
       setDescription(opportunity.description || '');
+      setSharedUsers(opportunity.sharedUsers || []);
+      
+      // Check if user can manage shared users (admin or owner only)
+      const checkPermissions = async () => {
+        if (user) {
+          const isAdmin = await canAccessAllData();
+          const isOwner = opportunity.owner === user.id;
+          setCanManageSharedUsers(isAdmin || isOwner);
+        }
+      };
+      checkPermissions();
       
       // Fetch account name if accountId exists
       if (opportunity.accountId) {
@@ -249,6 +266,20 @@ export default function EditOpportunityModal({
     setEditIsPrivate(false);
   };
 
+  const handleViewNote = (note: Note) => {
+    setViewingNoteId(note.id);
+    setEditNoteContent(note.content);
+    setEditNoteAttachments(note.attachments || []);
+    setEditIsPrivate(note.isPrivate || false);
+  };
+
+  const handleCloseView = () => {
+    setViewingNoteId(null);
+    setEditNoteContent('');
+    setEditNoteAttachments([]);
+    setEditIsPrivate(false);
+  };
+
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm('Are you sure you want to delete this note?')) return;
     if (!opportunity) return;
@@ -360,6 +391,7 @@ export default function EditOpportunityModal({
       setProbability(opportunity.probability?.toString() || '');
       setExpectedCloseDate(opportunity.expectedCloseDate ? opportunity.expectedCloseDate.toISOString().split('T')[0] : '');
       setDescription(opportunity.description || '');
+      setSharedUsers(opportunity.sharedUsers || []);
     }
     setError(null);
   };
@@ -417,6 +449,7 @@ export default function EditOpportunityModal({
       } else {
         updateData.description = null;
       }
+      updateData.sharedUsers = sharedUsers.length > 0 ? sharedUsers : null;
 
       await opportunityService.update(opportunity.id, updateData);
       
@@ -448,30 +481,41 @@ export default function EditOpportunityModal({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-lg w-full max-w-2xl mb-8 px-4 sm:px-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Opportunity</h3>
-          <div className="flex items-center gap-2">
-            {/* Cancel icon */}
-            <button
-              type="button"
-              onClick={handleClose}
-              className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
-              title="Cancel"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 6L14 14M6 14L14 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {/* Save icon */}
-            <button
-              type="submit"
-              form="edit-opportunity-form"
-              className="p-1.5 rounded-full text-brand-500 hover:text-white hover:bg-brand-500 dark:text-brand-400 dark:hover:bg-brand-500 transition-colors disabled:opacity-50"
-              title="Save"
-              disabled={loading}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 10.5L8.5 14L15 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+          <div className="flex items-center gap-3">
+            {/* Shared Users Button - only show for admins and owners */}
+            {user && canManageSharedUsers && (
+              <SharedUsersManager
+                sharedUsers={sharedUsers}
+                onSharedUsersChange={setSharedUsers}
+                disabled={loading}
+                currentUserId={user.id}
+              />
+            )}
+            <div className="flex items-center gap-2">
+              {/* Cancel icon */}
+              <button
+                type="button"
+                onClick={handleClose}
+                className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
+                title="Cancel"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 6L14 14M6 14L14 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {/* Save icon */}
+              <button
+                type="submit"
+                form="edit-opportunity-form"
+                className="p-1.5 rounded-full text-brand-500 hover:text-white hover:bg-brand-500 dark:text-brand-400 dark:hover:bg-brand-500 transition-colors disabled:opacity-50"
+                title="Save"
+                disabled={loading}
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 10.5L8.5 14L15 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -735,6 +779,7 @@ export default function EditOpportunityModal({
                 {notes.map((note) => {
                   const isExpanded = expandedNotes.has(note.id);
                   const isEditing = editingNoteId === note.id;
+                  const isViewing = viewingNoteId === note.id;
                   
                   if (isEditing) {
                     return (
@@ -778,6 +823,43 @@ export default function EditOpportunityModal({
                     );
                   }
 
+                  if (isViewing) {
+                    return (
+                      <div key={note.id} className="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-l-4 border-gray-400 dark:border-gray-600">
+                        <div className="space-y-2">
+                          <RichTextEditor
+                            value={editNoteContent}
+                            onChange={() => {}} // No-op in read-only mode
+                            attachments={editNoteAttachments}
+                            onAttachmentsChange={() => {}} // No-op in read-only mode
+                            placeholder=""
+                            readOnly={true}
+                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`view-isPrivate-${note.id}`}
+                              checked={editIsPrivate}
+                              disabled={true}
+                              className="h-3 w-3 text-brand-500 focus:ring-brand-500 border-gray-300 rounded disabled:opacity-50"
+                            />
+                            <label htmlFor={`view-isPrivate-${note.id}`} className="text-xs text-gray-700 dark:text-gray-300">
+                              Private
+                            </label>
+                            <div className="flex-1"></div>
+                            <button
+                              type="button"
+                              onClick={handleCloseView}
+                              className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-start min-w-[600px]">
                       <div className="col-span-2">
@@ -792,6 +874,7 @@ export default function EditOpportunityModal({
                           maxLength={80}
                           showFull={isExpanded}
                           onToggleExpand={() => toggleNoteExpansion(note.id)}
+                          viewOnly={false}
                         />
                       </div>
                       <div className="col-span-2">
@@ -807,34 +890,38 @@ export default function EditOpportunityModal({
                         )}
                       </div>
                       <div className="col-span-2 flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => user && note.createdBy === user.id && handleEditNote(note)}
-                          disabled={!user || note.createdBy !== user.id}
-                          className={`p-1 rounded transition-colors ${
-                            user && note.createdBy === user.id
-                              ? 'text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 cursor-pointer'
-                              : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50'
-                          }`}
-                          title={user && note.createdBy === user.id ? "Edit" : "You can only edit notes you created"}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => user && note.createdBy === user.id && handleDeleteNote(note.id)}
-                          disabled={!user || note.createdBy !== user.id}
-                          className={`p-1 rounded transition-colors ${
-                            user && note.createdBy === user.id
-                              ? 'text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 cursor-pointer'
-                              : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50'
-                          }`}
-                          title={user && note.createdBy === user.id ? "Delete" : "You can only delete notes you created"}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {user && note.createdBy === user.id ? (
+                          <>
+                            <button
+                              onClick={() => handleEditNote(note)}
+                              className="p-1 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                              title="Edit"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="p-1 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                              title="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleViewNote(note)}
+                            className="p-1 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition-colors"
+                            title="View full note"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

@@ -17,6 +17,7 @@ import { canAccessAllData } from '../lib/auth-helpers';
 import DatePicker from './DatePicker';
 import { RichTextEditor } from './RichTextEditor';
 import { NoteContent } from './NoteContent';
+import { SharedUsersManager } from './SharedUsersManager';
 
 const initialFormData: AccountFormData = {
   name: '',
@@ -45,6 +46,7 @@ export function AccountForm() {
   const [isReadOnly, setIsReadOnly] = useState(isViewMode);
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(isViewMode ? 'View only mode' : null);
   const [, setAccount] = useState<any>(null);
+  const [canManageSharedUsers, setCanManageSharedUsers] = useState(false);
   const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'contacts' | 'opportunities'>('notes');
   const [notes, setNotes] = useState<Note[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -58,6 +60,7 @@ export function AccountForm() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [viewingNoteId, setViewingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editNoteAttachments, setEditNoteAttachments] = useState<NoteAttachment[]>([]);
   const [editIsPrivate, setEditIsPrivate] = useState(false);
@@ -131,18 +134,34 @@ export function AccountForm() {
           shippingAddress: accountData.shippingAddress,
           status: accountData.status,
           description: accountData.description || '',
-          assignedTo: accountData.assignedTo
+          assignedTo: accountData.assignedTo,
+          sharedUsers: accountData.sharedUsers || []
         });
+
+        // Check if user can manage shared users (admin or owner only)
+        if (user) {
+          const isAdmin = await canAccessAllData();
+          const isOwner = accountData.createdBy === user.id;
+          setCanManageSharedUsers(isAdmin || isOwner);
+        }
 
         // Check if user can edit this account (only if not in view mode)
         if (user && !isViewMode) {
           const isAdmin = await canAccessAllData();
           
           if (!isAdmin) {
-            // Check if account is owned by user
-            if (accountData.createdBy !== user.id) {
-              setIsReadOnly(true);
-              setReadOnlyReason('You can only edit accounts you created.');
+            // Check if account is owned by user or user has edit permission via sharing
+            const sharedUser = accountData.sharedUsers?.find(su => su.userId === user.id);
+            const hasEditPermission = accountData.createdBy === user.id || (sharedUser && sharedUser.permission === 'edit');
+            
+            if (!hasEditPermission) {
+              if (sharedUser && sharedUser.permission === 'view') {
+                setIsReadOnly(true);
+                setReadOnlyReason('You have view-only access to this account.');
+              } else {
+                setIsReadOnly(true);
+                setReadOnlyReason('You can only edit accounts you created or have been granted edit access to.');
+              }
             } else {
               // For non-admin users, accounts linked to opportunities are read-only
               // (even if they own the account)
@@ -346,6 +365,20 @@ export function AccountForm() {
     setEditIsPrivate(false);
   };
 
+  const handleViewNote = (note: Note) => {
+    setViewingNoteId(note.id);
+    setEditNoteContent(note.content);
+    setEditNoteAttachments(note.attachments || []);
+    setEditIsPrivate(note.isPrivate || false);
+  };
+
+  const handleCloseView = () => {
+    setViewingNoteId(null);
+    setEditNoteContent('');
+    setEditNoteAttachments([]);
+    setEditIsPrivate(false);
+  };
+
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm('Are you sure you want to delete this note?')) return;
 
@@ -472,22 +505,42 @@ export function AccountForm() {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
             {isViewMode ? 'View Account' : id ? 'Edit Account' : 'New Account'}
           </h2>
-          <div className="flex items-center gap-2">
-            <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-              Status:
-            </label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              disabled={isReadOnly}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed min-w-[120px]"
-            >
-              <option value="prospect">Prospect</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+          <div className="flex items-center gap-3">
+            {/* Shared Users Button - only show for admins and owners */}
+            {id && user && canManageSharedUsers && (
+              <SharedUsersManager
+                sharedUsers={formData.sharedUsers || []}
+                onSharedUsersChange={(sharedUsers) => {
+                  setFormData(prev => ({ ...prev, sharedUsers }));
+                }}
+                disabled={isReadOnly}
+                currentUserId={user.id}
+              />
+            )}
+            {/* Cancel and Save buttons as icons */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate('/accounts')}
+                className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
+                title="Cancel"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 6L14 14M6 14L14 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                type="submit"
+                form="account-form"
+                disabled={loading || isReadOnly}
+                className="p-1.5 rounded-full text-brand-500 hover:text-white hover:bg-brand-500 dark:text-brand-400 dark:hover:bg-brand-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={loading ? 'Saving...' : isReadOnly ? 'Read Only' : 'Save Account'}
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 10.5L8.5 14L15 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -503,7 +556,7 @@ export function AccountForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="account-form" onSubmit={handleSubmit} className="space-y-4">
           {/* Account Name: Label and Field in 1 line */}
           <div className="flex items-center gap-2">
             <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
@@ -587,6 +640,25 @@ export function AccountForm() {
             </div>
           </div>
 
+          {/* Status: Label and Field in 1 line above Description */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Status:
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={formData.status}
+              onChange={handleInputChange}
+              disabled={isReadOnly}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed min-w-[120px]"
+            >
+              <option value="prospect">Prospect</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
           {/* Description: Label left aligned */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left mb-1">
@@ -601,23 +673,6 @@ export function AccountForm() {
               disabled={isReadOnly}
               className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
             />
-          </div>
-
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/accounts')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || isReadOnly}
-              className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Saving...' : isReadOnly ? 'Read Only' : 'Save Account'}
-            </button>
           </div>
         </form>
 
@@ -775,6 +830,7 @@ export function AccountForm() {
                   {notes.map((note) => {
                     const isExpanded = expandedNotes.has(note.id);
                     const isEditing = editingNoteId === note.id;
+                    const isViewing = viewingNoteId === note.id;
                     
                     if (isEditing) {
                       return (
@@ -818,6 +874,43 @@ export function AccountForm() {
                       );
                     }
                     
+                    if (isViewing) {
+                      return (
+                        <div key={note.id} className="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-l-4 border-gray-400 dark:border-gray-600">
+                          <div className="space-y-2">
+                            <RichTextEditor
+                              value={editNoteContent}
+                              onChange={() => {}} // No-op in read-only mode
+                              attachments={editNoteAttachments}
+                              onAttachmentsChange={() => {}} // No-op in read-only mode
+                              placeholder=""
+                              readOnly={true}
+                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`view-isPrivate-${note.id}`}
+                                checked={editIsPrivate}
+                                disabled={true}
+                                className="h-3 w-3 text-brand-500 focus:ring-brand-500 border-gray-300 rounded disabled:opacity-50"
+                              />
+                              <label htmlFor={`view-isPrivate-${note.id}`} className="text-xs text-gray-700 dark:text-gray-300">
+                                Private
+                              </label>
+                              <div className="flex-1"></div>
+                              <button
+                                type="button"
+                                onClick={handleCloseView}
+                                className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
                     return (
                       <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-start">
                         <div className="col-span-3">
@@ -832,6 +925,7 @@ export function AccountForm() {
                             maxLength={80}
                             showFull={isExpanded}
                             onToggleExpand={() => toggleNoteExpansion(note.id)}
+                            viewOnly={isReadOnly}
                           />
                         </div>
                         <div className="col-span-2">
@@ -847,7 +941,7 @@ export function AccountForm() {
                           )}
                         </div>
                         <div className="col-span-2 flex items-center justify-end gap-1">
-                          {user && note.createdBy === user.id && (
+                          {user && note.createdBy === user.id && !isReadOnly && (
                             <>
                               <button
                                 onClick={() => handleEditNote(note)}
@@ -868,6 +962,17 @@ export function AccountForm() {
                                 </svg>
                               </button>
                             </>
+                          )}
+                          {isReadOnly && (!user || note.createdBy !== user.id) && (
+                            <button
+                              onClick={() => handleViewNote(note)}
+                              className="p-1 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition-colors"
+                              title="View full note"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
                           )}
                         </div>
                       </div>
