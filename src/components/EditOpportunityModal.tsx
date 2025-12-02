@@ -34,6 +34,9 @@ export default function EditOpportunityModal({
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [notesLoading, setNotesLoading] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -142,6 +145,51 @@ export default function EditOpportunityModal({
   const truncateContent = (content: string, maxLength: number = 80): string => {
     if (content.length <= maxLength) return content;
     return content.substring(0, maxLength) + '...';
+  };
+
+  const handleEditNote = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditNoteContent(note.content);
+    setEditIsPrivate(note.isPrivate || false);
+  };
+
+  const handleUpdateNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNoteId || !editNoteContent.trim() || !user || !opportunity) return;
+
+    try {
+      setError(null);
+      await noteService.update(editingNoteId, {
+        content: editNoteContent.trim(),
+        isPrivate: editIsPrivate,
+      });
+      setEditingNoteId(null);
+      setEditNoteContent('');
+      setEditIsPrivate(false);
+      await loadNotes(opportunity.id);
+    } catch (err) {
+      setError('Failed to update note');
+      console.error('Error updating note:', err);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    setEditNoteContent('');
+    setEditIsPrivate(false);
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!window.confirm('Are you sure you want to delete this note?')) return;
+    if (!opportunity) return;
+
+    try {
+      await noteService.delete(noteId);
+      await loadNotes(opportunity.id);
+    } catch (err) {
+      setError('Failed to delete note');
+      console.error('Error deleting note:', err);
+    }
   };
 
   if (!open || !opportunity) return null;
@@ -398,27 +446,72 @@ export default function EditOpportunityModal({
               No notes found
             </div>
           ) : (
-            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
+            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto overflow-x-auto">
               {/* Grid Header */}
-              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
-                <div className="col-span-3">Created By</div>
+              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0 min-w-[600px]">
+                <div className="col-span-2">Created By</div>
                 <div className="col-span-5">Content</div>
                 <div className="col-span-2">Date</div>
                 <div className="col-span-1">Status</div>
-                <div className="col-span-1"></div>
+                <div className="col-span-2">Actions</div>
               </div>
               {/* Grid Rows */}
               <div className="divide-y divide-gray-200 dark:divide-gray-600">
                 {notes.map((note) => {
                   const isExpanded = expandedNotes.has(note.id);
                   const contentIsLong = note.content.length > 80;
+                  const isEditing = editingNoteId === note.id;
+                  
+                  if (isEditing) {
+                    return (
+                      <div key={note.id} className="px-3 py-3 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500">
+                        <form onSubmit={handleUpdateNote} className="space-y-2">
+                          <textarea
+                            value={editNoteContent}
+                            onChange={(e) => setEditNoteContent(e.target.value)}
+                            rows={3}
+                            required
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                            placeholder="Enter your note here..."
+                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`edit-isPrivate-${note.id}`}
+                              checked={editIsPrivate}
+                              onChange={(e) => setEditIsPrivate(e.target.checked)}
+                              className="h-3 w-3 text-brand-500 focus:ring-brand-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`edit-isPrivate-${note.id}`} className="text-xs text-gray-700 dark:text-gray-300">
+                              Private
+                            </label>
+                            <div className="flex-1"></div>
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-2 py-1 text-xs font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    );
+                  }
+
                   const displayContent = isExpanded || !contentIsLong 
                     ? note.content 
                     : truncateContent(note.content, 80);
                   
                   return (
-                    <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
-                      <div className="col-span-3">
+                    <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center min-w-[600px]">
+                      <div className="col-span-2">
                         <span className="text-xs text-gray-900 dark:text-white truncate block">
                           {getUserName(note.createdBy)}
                         </span>
@@ -459,7 +552,36 @@ export default function EditOpportunityModal({
                           </span>
                         )}
                       </div>
-                      <div className="col-span-1"></div>
+                      <div className="col-span-2 flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => user && note.createdBy === user.id && handleEditNote(note)}
+                          disabled={!user || note.createdBy !== user.id}
+                          className={`p-1 rounded transition-colors ${
+                            user && note.createdBy === user.id
+                              ? 'text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 cursor-pointer'
+                              : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50'
+                          }`}
+                          title={user && note.createdBy === user.id ? "Edit" : "You can only edit notes you created"}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => user && note.createdBy === user.id && handleDeleteNote(note.id)}
+                          disabled={!user || note.createdBy !== user.id}
+                          className={`p-1 rounded transition-colors ${
+                            user && note.createdBy === user.id
+                              ? 'text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 cursor-pointer'
+                              : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50'
+                          }`}
+                          title={user && note.createdBy === user.id ? "Delete" : "You can only delete notes you created"}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

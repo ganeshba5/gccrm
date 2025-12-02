@@ -36,6 +36,9 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
   const [newNoteContent, setNewNoteContent] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
 
   useEffect(() => {
     if (entityId && entityType) {
@@ -117,6 +120,38 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
       setError('Failed to create note');
       console.error('Error creating note:', err);
     }
+  };
+
+  const handleEditNote = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditNoteContent(note.content);
+    setEditIsPrivate(note.isPrivate || false);
+  };
+
+  const handleUpdateNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNoteId || !editNoteContent.trim()) return;
+
+    try {
+      setError(null);
+      await noteService.update(editingNoteId, {
+        content: editNoteContent.trim(),
+        isPrivate: editIsPrivate,
+      });
+      setEditingNoteId(null);
+      setEditNoteContent('');
+      setEditIsPrivate(false);
+      await loadNotes();
+    } catch (err) {
+      setError('Failed to update note');
+      console.error('Error updating note:', err);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    setEditNoteContent('');
+    setEditIsPrivate(false);
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -279,6 +314,57 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
               {notes.map((note) => {
                 const isExpanded = expandedNotes.has(note.id);
                 const contentIsLong = note.content.length > 100;
+                const isEditing = editingNoteId === note.id;
+                
+                if (isEditing) {
+                  return (
+                    <div key={note.id} className="px-6 py-4 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500">
+                      <form onSubmit={handleUpdateNote} className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Note Content *
+                          </label>
+                          <textarea
+                            value={editNoteContent}
+                            onChange={(e) => setEditNoteContent(e.target.value)}
+                            rows={4}
+                            required
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+                            placeholder="Enter your note here..."
+                          />
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id={`edit-isPrivate-${note.id}`}
+                            checked={editIsPrivate}
+                            onChange={(e) => setEditIsPrivate(e.target.checked)}
+                            className="h-4 w-4 text-brand-500 focus:ring-brand-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor={`edit-isPrivate-${note.id}`} className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Private (only visible to you)
+                          </label>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  );
+                }
+
                 const displayContent = isExpanded || !contentIsLong 
                   ? note.content 
                   : truncateContent(note.content, 100);
@@ -332,17 +418,28 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
                         </span>
                       )}
                     </div>
-                    <div className="col-span-1 flex items-center justify-end">
+                    <div className="col-span-1 flex items-center justify-end gap-1">
                       {user && note.createdBy === user.id && (
-                        <button
-                          onClick={() => handleDeleteNote(note.id)}
-                          className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleEditNote(note)}
+                            className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                            title="Edit"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

@@ -128,11 +128,31 @@ export function NoteForm() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
-    }));
+    
+    // If accountId changes, clear contactId and opportunityId
+    if (name === 'accountId') {
+      setFormData(prev => ({ 
+        ...prev, 
+        accountId: value,
+        contactId: '', // Clear contact when account changes
+        opportunityId: '', // Clear opportunity when account changes
+      }));
+    } else {
+      setFormData(prev => ({ 
+        ...prev, 
+        [name]: type === 'checkbox' ? checked : value 
+      }));
+    }
   };
+
+  // Filter contacts and opportunities based on selected account
+  const filteredContacts = formData.accountId 
+    ? contacts.filter(contact => contact.accountId === formData.accountId)
+    : [];
+  
+  const filteredOpportunities = formData.accountId
+    ? opportunities.filter(opportunity => opportunity.accountId === formData.accountId)
+    : [];
 
   if (loading && id) {
     return <div className="p-4">Loading note data...</div>;
@@ -195,10 +215,11 @@ export function NoteForm() {
                 name="contactId"
                 value={formData.contactId}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+                disabled={!formData.accountId}
+                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500 dark:disabled:text-gray-400"
               >
                 <option value="">None</option>
-                {contacts.map(contact => (
+                {filteredContacts.map(contact => (
                   <option key={contact.id} value={contact.id}>
                     {contact.firstName} {contact.lastName}
                   </option>
@@ -215,10 +236,11 @@ export function NoteForm() {
                 name="opportunityId"
                 value={formData.opportunityId}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+                disabled={!formData.accountId}
+                className="mt-1 block w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500 dark:disabled:text-gray-400"
               >
                 <option value="">None</option>
-                {opportunities.map(opportunity => (
+                {filteredOpportunities.map(opportunity => (
                   <option key={opportunity.id} value={opportunity.id}>{opportunity.name}</option>
                 ))}
               </select>

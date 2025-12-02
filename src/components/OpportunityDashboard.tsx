@@ -33,10 +33,30 @@ export default function OpportunityDashboard() {
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
-  const [dateFilterType, setDateFilterType] = useState<string>('year'); // 'all', 'month', 'quarter', 'year', 'custom'
-  const [dateFilterValue, setDateFilterValue] = useState<string>(new Date().getFullYear().toString()); // For month, quarter, year selections - default to current year
-  const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [dateFilterType, setDateFilterType] = useState<string>(() => {
+    const saved = localStorage.getItem('opportunities_dateFilterType');
+    // If no saved value, default to current year (first time use)
+    if (!saved) {
+      return 'year';
+    }
+    return saved;
+  });
+  const [dateFilterValue, setDateFilterValue] = useState<string>(() => {
+    const saved = localStorage.getItem('opportunities_dateFilterValue');
+    // If no saved value, default to current year (first time use)
+    if (!saved) {
+      return new Date().getFullYear().toString();
+    }
+    return saved;
+  });
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    const saved = localStorage.getItem('opportunities_customStartDate');
+    return saved || '';
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    const saved = localStorage.getItem('opportunities_customEndDate');
+    return saved || '';
+  });
   const [showCreateAccount, setShowCreateAccount] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
@@ -49,6 +69,23 @@ export default function OpportunityDashboard() {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // Save filter settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('opportunities_dateFilterType', dateFilterType);
+  }, [dateFilterType]);
+
+  useEffect(() => {
+    localStorage.setItem('opportunities_dateFilterValue', dateFilterValue);
+  }, [dateFilterValue]);
+
+  useEffect(() => {
+    localStorage.setItem('opportunities_customStartDate', customStartDate);
+  }, [customStartDate]);
+
+  useEffect(() => {
+    localStorage.setItem('opportunities_customEndDate', customEndDate);
+  }, [customEndDate]);
 
   const fetchAccounts = async () => {
     try {
