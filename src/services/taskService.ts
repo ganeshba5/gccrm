@@ -123,49 +123,74 @@ class TaskService {
       }
       
       const isAdmin = await canAccessAllData();
-      let docs;
+      const allDocs: any[] = [];
       
+      // Query 1: Tasks assigned to current user
       try {
-        if (isAdmin) {
-          // Admin can see all tasks
-          const q = query(this.tasksRef, orderBy('createdAt', 'desc'));
-          const querySnapshot = await getDocs(q);
-          docs = querySnapshot.docs;
-        } else {
-          // Non-admin users can only see tasks they created
-          const q = query(
-            this.tasksRef,
-            where('createdBy', '==', currentUser.id),
-            orderBy('createdAt', 'desc')
-          );
-          const querySnapshot = await getDocs(q);
-          docs = querySnapshot.docs;
-        }
+        const assignedQuery = query(
+          this.tasksRef,
+          where('assignedTo', '==', currentUser.id),
+          orderBy('createdAt', 'desc')
+        );
+        const assignedSnapshot = await getDocs(assignedQuery);
+        allDocs.push(...assignedSnapshot.docs);
       } catch (queryError: any) {
-        // If query with orderBy fails, try without orderBy and sort in memory
-        if (isAdmin) {
-          const querySnapshot = await getDocs(this.tasksRef);
-          docs = querySnapshot.docs;
-        } else {
-          const q = query(
+        // If query with orderBy fails, try without orderBy
+        try {
+          const assignedQuery = query(
             this.tasksRef,
-            where('createdBy', '==', currentUser.id)
+            where('assignedTo', '==', currentUser.id)
           );
-          const querySnapshot = await getDocs(q);
-          docs = querySnapshot.docs;
+          const assignedSnapshot = await getDocs(assignedQuery);
+          allDocs.push(...assignedSnapshot.docs);
+        } catch (err) {
+          console.warn('Error fetching assigned tasks:', err);
         }
-        
-        // Sort in memory by createdAt (descending)
-        docs.sort((a, b) => {
-          const aData = a.data();
-          const bData = b.data();
-          const aTime = aData.createdAt?.toMillis?.() || 0;
-          const bTime = bData.createdAt?.toMillis?.() || 0;
-          return bTime - aTime; // Descending
-        });
       }
       
-      return docs.map(doc => this.convertToTask(doc as DocumentSnapshot));
+      // Query 2: Unassigned tasks (assignedTo is null or undefined)
+      try {
+        // Firestore doesn't support querying for null directly, so we need to get all tasks
+        // and filter in memory, or use a different approach
+        // For now, we'll fetch all tasks and filter unassigned ones
+        const allTasksSnapshot = await getDocs(this.tasksRef);
+        const unassignedDocs = allTasksSnapshot.docs.filter(doc => {
+          const data = doc.data();
+          return !data.assignedTo || data.assignedTo === null;
+        });
+        
+        if (isAdmin) {
+          // Admin: Show all unassigned tasks
+          allDocs.push(...unassignedDocs);
+        } else {
+          // Non-Admin: Show only unassigned tasks created by current user
+          const userUnassignedDocs = unassignedDocs.filter(doc => {
+            const data = doc.data();
+            return data.createdBy === currentUser.id;
+          });
+          allDocs.push(...userUnassignedDocs);
+        }
+      } catch (err) {
+        console.warn('Error fetching unassigned tasks:', err);
+      }
+      
+      // Remove duplicates (in case a task appears in both queries)
+      const uniqueDocs = new Map<string, any>();
+      allDocs.forEach(doc => {
+        uniqueDocs.set(doc.id, doc);
+      });
+      
+      // Convert to Task array and sort by createdAt (descending)
+      const tasks = Array.from(uniqueDocs.values()).map(doc => this.convertToTask(doc as DocumentSnapshot));
+      
+      // Sort in memory by createdAt (descending)
+      tasks.sort((a, b) => {
+        const aTime = a.createdAt.getTime();
+        const bTime = b.createdAt.getTime();
+        return bTime - aTime; // Descending
+      });
+      
+      return tasks;
     } catch (error) {
       console.error('Error getting tasks:', error);
       throw error;
