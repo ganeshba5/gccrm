@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import type { AccountFormData } from '../types/account';
 import type { Note } from '../types/note';
 import type { Task } from '../types/task';
@@ -33,7 +33,9 @@ export function AccountForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const isViewMode = location.pathname.includes('/view');
+  const fromOpportunities = searchParams.get('from') === 'opportunities';
   const { user } = useAuth();
   const [formData, setFormData] = useState<AccountFormData>(initialFormData);
   const [loading, setLoading] = useState(false);
@@ -271,9 +273,7 @@ export function AccountForm() {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: 'numeric'
     });
   };
 
@@ -393,7 +393,23 @@ export function AccountForm() {
   }
 
   return (
-    <div className="p-6">
+    <>
+      {/* Breadcrumb Navigation */}
+      {fromOpportunities && (
+        <div className="px-6 pt-4 pb-2">
+          <nav className="flex items-center space-x-2 text-sm">
+            <button
+              onClick={() => navigate('/opportunities')}
+              className="text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors"
+            >
+              Opportunities
+            </button>
+            <span className="text-gray-400 dark:text-gray-500">/</span>
+            <span className="text-gray-700 dark:text-gray-300">{formData.name || 'Account'}</span>
+          </nav>
+        </div>
+      )}
+      <div className="p-6">
       <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
@@ -1118,6 +1134,7 @@ export function AccountForm() {
         )}
       </div>
     </div>
+    </>
   );
 }
 

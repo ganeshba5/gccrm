@@ -95,18 +95,18 @@ export default function OpportunityTable({ opportunities, accountNames, userName
         
         // Navigate to edit or view mode based on permissions
         if (canEdit) {
-          navigate(`/accounts/${accountId}/edit`);
+          navigate(`/accounts/${accountId}/edit?from=opportunities`);
         } else {
-          navigate(`/accounts/${accountId}/view`);
+          navigate(`/accounts/${accountId}/view?from=opportunities`);
         }
       } else {
         // If account not found, default to view mode
-        navigate(`/accounts/${accountId}/view`);
+        navigate(`/accounts/${accountId}/view?from=opportunities`);
       }
     } catch (err) {
       console.error('Error checking account permissions:', err);
       // On error, default to view mode
-      navigate(`/accounts/${accountId}/view`);
+      navigate(`/accounts/${accountId}/view?from=opportunities`);
     }
   };
 
