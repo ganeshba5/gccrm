@@ -60,7 +60,7 @@ export default function StageOpportunitiesModal({
 
         <div className="pb-6">
           {opportunities.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+            <div className="text-left h-64 text-gray-500 dark:text-gray-400 flex items-center">
               No opportunities found for this stage
             </div>
           ) : (
@@ -82,19 +82,19 @@ export default function StageOpportunitiesModal({
                       onClick={() => onOpportunityClick(opp.id)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white text-left">
                         {opp.name}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-left">
                         {opp.accountId ? (accountNames.get(opp.accountId) || opp.accountId) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-left">
                         {formatCurrency(opp.amount)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap text-left">
                         {formatDate(opp.expectedCloseDate)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-left">
                         {opp.probability ? `${opp.probability}%` : '-'}
                       </td>
                     </tr>

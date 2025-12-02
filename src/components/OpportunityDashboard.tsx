@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import OpportunityTable from './OpportunityTable';
 // OpportunityProfilePanel removed - EditOpportunityModal is used instead
 import AddOpportunityModal from './AddOpportunityModal';
@@ -17,6 +17,8 @@ import NestedDateFilter from './NestedDateFilter';
 
 export default function OpportunityDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   // const [users] = useState<any[]>([]); // Reserved for future use
@@ -69,6 +71,19 @@ export default function OpportunityDashboard() {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // Check for ID in URL params to open edit modal
+  useEffect(() => {
+    if (id && opportunities.length > 0) {
+      const opportunity = opportunities.find(opp => opp.id === id);
+      if (opportunity) {
+        setOpportunityToEdit(opportunity);
+        setIsEditOpen(true);
+        // Navigate back to /opportunities to clean up URL
+        navigate('/opportunities', { replace: true });
+      }
+    }
+  }, [id, opportunities, navigate]);
 
   // Save filter settings to localStorage whenever they change
   useEffect(() => {
@@ -602,6 +617,10 @@ export default function OpportunityDashboard() {
         onClose={() => {
           setIsEditOpen(false);
           setOpportunityToEdit(null);
+          // Navigate back to base opportunities route if we came from edit route
+          if (id) {
+            navigate('/opportunities', { replace: true });
+          }
         }}
         onUpdate={handleEditUpdate}
         opportunity={opportunityToEdit}

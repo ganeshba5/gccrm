@@ -46,6 +46,16 @@ export default function App() {
           />
           {/* Opportunity routes - specific routes must come before general ones */}
           <Route
+            path="/opportunities/:id/edit"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <OpportunityDashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/opportunities/:id/notes"
             element={
               <ProtectedRoute>

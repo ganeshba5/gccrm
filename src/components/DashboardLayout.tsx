@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserProfileModal } from './UserProfileModal';
+import { canAccessAllData } from '../lib/auth-helpers';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -13,6 +14,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, signOut } = useAuth();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMoreExpanded, setIsMoreExpanded] = useState(false);
+  const [isAdminExpanded, setIsAdminExpanded] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -27,6 +31,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // Refresh the page to get updated user data
     window.location.reload();
   };
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const adminStatus = await canAccessAllData();
+      setIsAdmin(adminStatus);
+    };
+    if (user) {
+      checkAdmin();
+    }
+  }, [user]);
+
+  // Auto-expand sections if their items are active
+  useEffect(() => {
+    const moreActive = moreMenuItems.some(item => isActive(item.path));
+    const adminActive = adminMenuItems.some(item => isActive(item.path));
+    
+    if (moreActive) {
+      setIsMoreExpanded(true);
+    }
+    if (isAdmin && adminActive) {
+      setIsAdminExpanded(true);
+    }
+  }, [location.pathname, isAdmin]);
 
   const getPageMeta = () => {
     const path = location.pathname;
@@ -77,24 +105,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return null;
   };
 
-  const allMenuItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '📊', adminOnly: false },
-    { path: '/opportunities', label: 'Opportunities', icon: '💼', adminOnly: false },
-    { path: '/accounts', label: 'Accounts', icon: '🏢', adminOnly: false },
-    { path: '/contacts', label: 'Contacts', icon: '📇', adminOnly: false },
-    { path: '/tasks', label: 'Tasks', icon: '✅', adminOnly: false },
-    { path: '/notes', label: 'Notes', icon: '📝', adminOnly: false },
-    { path: '/users', label: 'Users', icon: '👤', adminOnly: true },
-    { path: '/settings', label: 'Settings', icon: '⚙️', adminOnly: false },
+  // Main menu items (always visible)
+  const mainMenuItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { path: '/opportunities', label: 'Opportunities', icon: '💼' },
+    { path: '/tasks', label: 'Tasks', icon: '✅' },
+    { path: '/notes', label: 'Notes', icon: '📝' },
   ];
 
-  // Filter menu items based on user role
-  const menuItems = allMenuItems.filter(item => {
-    if (item.adminOnly) {
-      return user?.role === 'admin';
-    }
-    return true;
-  });
+  // More menu items (collapsible)
+  const moreMenuItems = [
+    { path: '/contacts', label: 'Contacts', icon: '📇' },
+    { path: '/accounts', label: 'Accounts', icon: '🏢' },
+    { path: '/settings', label: 'Settings', icon: '⚙️' },
+  ];
+
+  // Admin menu items (collapsible, admin only)
+  const adminMenuItems = [
+    { path: '/users', label: 'Users', icon: '👤' },
+  ];
+
+  // Check if any item in a group is active
+  const isGroupActive = (items: typeof moreMenuItems) => {
+    return items.some(item => isActive(item.path));
+  };
 
   const isActive = (path: string) => {
     if (path === '/dashboard') {
@@ -196,7 +230,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       >
         {/* Navigation */}
         <nav className="flex-1 p-5 space-y-1 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => (
+          {/* Main Menu Items */}
+          {mainMenuItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
@@ -213,6 +248,104 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="font-medium">{item.label}</span>
             </Link>
           ))}
+
+          {/* More Menu (Collapsible) */}
+          <div className="mt-2">
+            <button
+              onClick={() => setIsMoreExpanded(!isMoreExpanded)}
+              className={`menu-item group w-full flex items-center justify-between ${
+                isGroupActive(moreMenuItems) ? 'menu-item-active' : 'menu-item-inactive'
+              }`}
+            >
+              <div className="flex items-center">
+                <span className={`menu-item-icon-size ${
+                  isGroupActive(moreMenuItems) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
+                }`}>
+                  <span className="text-xl">⋯</span>
+                </span>
+                <span className="font-medium">More</span>
+              </div>
+              <svg
+                className={`w-4 h-4 transition-transform ${isMoreExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {isMoreExpanded && (
+              <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
+                {moreMenuItems.map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsSidebarOpen(false)}
+                    className={`menu-item group ${
+                      isActive(item.path) ? 'menu-item-active' : 'menu-item-inactive'
+                    }`}
+                  >
+                    <span className={`menu-item-icon-size ${
+                      isActive(item.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
+                    }`}>
+                      <span className="text-xl">{item.icon}</span>
+                    </span>
+                    <span className="font-medium">{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Admin Menu (Collapsible, Admin Only) */}
+          {isAdmin && (
+            <div className="mt-2">
+              <button
+                onClick={() => setIsAdminExpanded(!isAdminExpanded)}
+                className={`menu-item group w-full flex items-center justify-between ${
+                  isGroupActive(adminMenuItems) ? 'menu-item-active' : 'menu-item-inactive'
+                }`}
+              >
+                <div className="flex items-center">
+                  <span className={`menu-item-icon-size ${
+                    isGroupActive(adminMenuItems) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
+                  }`}>
+                    <span className="text-xl">🔐</span>
+                  </span>
+                  <span className="font-medium">Admin</span>
+                </div>
+                <svg
+                  className={`w-4 h-4 transition-transform ${isAdminExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {isAdminExpanded && (
+                <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
+                  {adminMenuItems.map((item) => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsSidebarOpen(false)}
+                      className={`menu-item group ${
+                        isActive(item.path) ? 'menu-item-active' : 'menu-item-inactive'
+                      }`}
+                    >
+                      <span className={`menu-item-icon-size ${
+                        isActive(item.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
+                      }`}>
+                        <span className="text-xl">{item.icon}</span>
+                      </span>
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
       </aside>
 
