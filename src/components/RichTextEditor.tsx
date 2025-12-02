@@ -345,7 +345,8 @@ export function RichTextEditor({
         <EditorContent editor={editor} />
       </div>
       
-      {!readOnly && (
+      {/* Temporarily disabled - Attach Files feature */}
+      {false && !readOnly && (
         <div className="mt-3">
           <input
             ref={fileInputRef}
@@ -390,7 +391,8 @@ export function RichTextEditor({
         </div>
       )}
 
-      {attachments.length > 0 && (
+      {/* Temporarily disabled - Attachments display */}
+      {false && attachments.length > 0 && (
         <div className="mt-3 space-y-2">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Attachments ({attachments.length})
@@ -417,7 +419,8 @@ export function RichTextEditor({
                     </div>
                   </div>
                 </div>
-                {!readOnly && onAttachmentsChange && (
+                {/* Temporarily disabled - Remove attachment button */}
+                {false && !readOnly && onAttachmentsChange && (
                   <button
                     type="button"
                     onClick={() => handleRemoveAttachment(attachment.id)}
