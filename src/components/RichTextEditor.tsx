@@ -29,6 +29,7 @@ export function RichTextEditor({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<any>(null);
 
   const editor = useEditor({
     extensions: [
@@ -47,6 +48,7 @@ export function RichTextEditor({
         HTMLAttributes: {
           class: 'max-w-full h-auto rounded',
         },
+        allowBase64: false, // We'll use uploaded URLs instead
       }),
       TextStyle,
       Color,
@@ -64,8 +66,66 @@ export function RichTextEditor({
         class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[200px] p-3',
         'data-placeholder': placeholder,
       },
+      handlePaste: (view, event) => {
+        if (readOnly || !onAttachmentsChange) return false;
+
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+
+        // Check if clipboard contains image files
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf('image') !== -1) {
+            event.preventDefault();
+            
+            const file = item.getAsFile();
+            if (!file) continue;
+
+            // Validate file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+              setUploadError(`Image "${file.name || 'pasted image'}" is too large. Maximum size is 10MB.`);
+              continue;
+            }
+
+            setUploading(true);
+            setUploadError(null);
+
+            // Upload image asynchronously
+            storageService.uploadFile(file, 'notes/attachments/')
+              .then((attachment) => {
+                // Add to attachments list
+                onAttachmentsChange([...attachments, attachment]);
+
+                // Insert image into editor using the view parameter
+                const { state, dispatch } = view;
+                const { schema } = state;
+                const imageNode = schema.nodes.image.create({ src: attachment.url });
+                const transaction = state.tr.replaceSelectionWith(imageNode);
+                dispatch(transaction);
+
+                setUploading(false);
+              })
+              .catch((error) => {
+                console.error('Error uploading pasted image:', error);
+                setUploadError('Failed to upload pasted image. Please try again.');
+                setUploading(false);
+              });
+
+            return true;
+          }
+        }
+
+        return false; // Allow default paste behavior for non-image content
+      },
     },
   });
+
+  // Store editor reference
+  useEffect(() => {
+    if (editor) {
+      editorRef.current = editor;
+    }
+  }, [editor]);
 
   // Update editor content when value prop changes from outside
   const previousValueRef = useRef(value);
@@ -345,8 +405,7 @@ export function RichTextEditor({
         <EditorContent editor={editor} />
       </div>
       
-      {/* Temporarily disabled - Attach Files feature */}
-      {false && !readOnly && (
+      {!readOnly && (
         <div className="mt-3">
           <input
             ref={fileInputRef}
@@ -391,8 +450,7 @@ export function RichTextEditor({
         </div>
       )}
 
-      {/* Temporarily disabled - Attachments display */}
-      {false && attachments.length > 0 && (
+      {attachments.length > 0 && (
         <div className="mt-3 space-y-2">
           <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Attachments ({attachments.length})
@@ -419,8 +477,7 @@ export function RichTextEditor({
                     </div>
                   </div>
                 </div>
-                {/* Temporarily disabled - Remove attachment button */}
-                {false && !readOnly && onAttachmentsChange && (
+                {!readOnly && onAttachmentsChange && (
                   <button
                     type="button"
                     onClick={() => handleRemoveAttachment(attachment.id)}
