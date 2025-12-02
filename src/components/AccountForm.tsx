@@ -2,13 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import type { AccountFormData } from '../types/account';
 import type { Note } from '../types/note';
+import type { Task } from '../types/task';
+import type { Contact } from '../types/contact';
+import type { Opportunity } from '../types/opportunity';
 import type { User } from '../types/user';
 import { accountService } from '../services/accountService';
 import { opportunityService } from '../services/opportunityService';
 import { noteService } from '../services/noteService';
+import { taskService } from '../services/taskService';
+import { contactService } from '../services/contactService';
 import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
+import DatePicker from './DatePicker';
 
 const initialFormData: AccountFormData = {
   name: '',
@@ -35,13 +41,32 @@ export function AccountForm() {
   const [isReadOnly, setIsReadOnly] = useState(isViewMode);
   const [readOnlyReason, setReadOnlyReason] = useState<string | null>(isViewMode ? 'View only mode' : null);
   const [, setAccount] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'contacts' | 'opportunities'>('notes');
   const [notes, setNotes] = useState<Note[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [notesLoading, setNotesLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteIsPrivate, setNewNoteIsPrivate] = useState(false);
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    status: 'not_started' as Task['status'],
+    priority: 'medium' as Task['priority'],
+    dueDate: '',
+  });
 
   useEffect(() => {
     if (id) {
@@ -68,6 +93,9 @@ export function AccountForm() {
     // Load notes when account ID is available
     if (id && user) {
       loadNotes(id);
+      loadTasks(id);
+      loadContacts(id);
+      loadOpportunities(id);
     }
   }, [id, user]);
 
@@ -190,6 +218,45 @@ export function AccountForm() {
     }
   };
 
+  const loadTasks = async (accountId: string) => {
+    try {
+      setTasksLoading(true);
+      const allTasks = await taskService.getByAccount(accountId);
+      setTasks(allTasks);
+    } catch (err) {
+      console.error('Error loading tasks:', err);
+      setTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  const loadContacts = async (accountId: string) => {
+    try {
+      setContactsLoading(true);
+      const allContacts = await contactService.getByAccount(accountId);
+      setContacts(allContacts);
+    } catch (err) {
+      console.error('Error loading contacts:', err);
+      setContacts([]);
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
+  const loadOpportunities = async (accountId: string) => {
+    try {
+      setOpportunitiesLoading(true);
+      const allOpportunities = await opportunityService.getByAccount(accountId);
+      setOpportunities(allOpportunities);
+    } catch (err) {
+      console.error('Error loading opportunities:', err);
+      setOpportunities([]);
+    } finally {
+      setOpportunitiesLoading(false);
+    }
+  };
+
   const getUserName = (userId: string): string => {
     const userData = users.get(userId);
     if (userData) {
@@ -268,6 +335,56 @@ export function AccountForm() {
     } catch (err) {
       setError('Failed to delete note');
       console.error('Error deleting note:', err);
+    }
+  };
+
+  const handleCreateNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !id || !newNoteContent.trim()) return;
+
+    try {
+      setError(null);
+      await noteService.create({
+        content: newNoteContent.trim(),
+        accountId: id,
+        isPrivate: newNoteIsPrivate,
+      }, user.id);
+      setNewNoteContent('');
+      setNewNoteIsPrivate(false);
+      setIsCreatingNote(false);
+      await loadNotes(id);
+    } catch (err) {
+      setError('Failed to create note');
+      console.error('Error creating note:', err);
+    }
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !id || !newTask.title.trim()) return;
+
+    try {
+      setError(null);
+      await taskService.create({
+        title: newTask.title.trim(),
+        description: newTask.description || undefined,
+        status: newTask.status,
+        priority: newTask.priority,
+        dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
+        accountId: id,
+      }, user.id);
+      setNewTask({
+        title: '',
+        description: '',
+        status: 'not_started',
+        priority: 'medium',
+        dueDate: '',
+      });
+      setIsCreatingTask(false);
+      await loadTasks(id);
+    } catch (err) {
+      setError('Failed to create task');
+      console.error('Error creating task:', err);
     }
   };
 
@@ -431,10 +548,125 @@ export function AccountForm() {
           </div>
         </form>
 
-        {/* Notes Section - only show when editing existing account */}
+        {/* Tabs Section: Notes, Tasks, Contacts, Opportunities - only show when editing existing account */}
         {id && (
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-md font-medium mb-3 text-gray-900 dark:text-white text-left">Notes</h4>
+            {/* Tab Headers */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setActiveTab('notes')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'notes'
+                      ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Notes
+                </button>
+                <button
+                  onClick={() => setActiveTab('tasks')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'tasks'
+                      ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Tasks
+                </button>
+                <button
+                  onClick={() => setActiveTab('contacts')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'contacts'
+                      ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Contacts
+                </button>
+                <button
+                  onClick={() => setActiveTab('opportunities')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'opportunities'
+                      ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Opportunities
+                </button>
+              </div>
+              {/* + Icon for creating new items */}
+              {activeTab === 'notes' && !isCreatingNote && (
+                <button
+                  onClick={() => setIsCreatingNote(true)}
+                  className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                  title="Create new note"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              )}
+              {activeTab === 'tasks' && !isCreatingTask && (
+                <button
+                  onClick={() => setIsCreatingTask(true)}
+                  className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                  title="Create new task"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Notes Tab Content */}
+            {activeTab === 'notes' && (
+              <>
+                {isCreatingNote && (
+                  <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-900/10 border border-brand-200 dark:border-brand-800 rounded-lg">
+                    <form onSubmit={handleCreateNote} className="space-y-3">
+                      <textarea
+                        value={newNoteContent}
+                        onChange={(e) => setNewNoteContent(e.target.value)}
+                        rows={4}
+                        required
+                        className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        placeholder="Enter your note here..."
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="new-isPrivate"
+                          checked={newNoteIsPrivate}
+                          onChange={(e) => setNewNoteIsPrivate(e.target.checked)}
+                          className="h-4 w-4 text-brand-500 focus:ring-brand-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor="new-isPrivate" className="text-sm text-gray-700 dark:text-gray-300">
+                          Private (only visible to you)
+                        </label>
+                        <div className="flex-1"></div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingNote(false);
+                            setNewNoteContent('');
+                            setNewNoteIsPrivate(false);
+                          }}
+                          className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
+                        >
+                          Create Note
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
             
             {notesLoading ? (
               <div className="text-center py-4 text-gray-500 dark:text-gray-400">
@@ -580,6 +812,307 @@ export function AccountForm() {
                   })}
                 </div>
               </div>
+            )}
+              </>
+            )}
+
+            {/* Tasks Tab Content */}
+            {activeTab === 'tasks' && (
+              <>
+                {isCreatingTask && (
+                  <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-900/10 border border-brand-200 dark:border-brand-800 rounded-lg">
+                    <form onSubmit={handleCreateTask} className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Title *
+                        </label>
+                        <input
+                          type="text"
+                          value={newTask.title}
+                          onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                          required
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Description
+                        </label>
+                        <textarea
+                          value={newTask.description}
+                          onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                          rows={3}
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Status
+                          </label>
+                          <select
+                            value={newTask.status}
+                            onChange={(e) => setNewTask({ ...newTask, status: e.target.value as Task['status'] })}
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                          >
+                            <option value="not_started">Not Started</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Priority
+                          </label>
+                          <select
+                            value={newTask.priority}
+                            onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })}
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                          >
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Due Date
+                        </label>
+                        <DatePicker
+                          value={newTask.dueDate}
+                          onChange={(value) => setNewTask({ ...newTask, dueDate: value })}
+                          placeholder="Select due date"
+                          className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingTask(false);
+                            setNewTask({
+                              title: '',
+                              description: '',
+                              status: 'not_started',
+                              priority: 'medium',
+                              dueDate: '',
+                            });
+                          }}
+                          className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
+                        >
+                          Create Task
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+                
+                {tasksLoading ? (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    Loading tasks...
+                  </div>
+                ) : tasks.length === 0 ? (
+                  <div className="text-center py-3 text-gray-500 dark:text-gray-400 text-sm">
+                    No tasks found
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto overflow-x-auto">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0 min-w-[600px]">
+                      <div className="col-span-3">Title</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2">Priority</div>
+                      <div className="col-span-2">Due Date</div>
+                      <div className="col-span-3">Description</div>
+                    </div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                      {tasks.map((task) => {
+                        const isExpanded = expandedTasks.has(task.id);
+                        const descIsLong = task.description && task.description.length > 80;
+                        const displayDesc = isExpanded || !descIsLong 
+                          ? (task.description || '-')
+                          : truncateContent(task.description || '', 80);
+                        
+                        return (
+                          <div key={task.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center min-w-[600px]">
+                            <div className="col-span-3">
+                              <span className="text-xs text-gray-900 dark:text-white truncate block">
+                                {task.title}
+                              </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${
+                                task.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                                task.status === 'in_progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
+                                task.status === 'cancelled' ? 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400' :
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                              }`}>
+                                {task.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${
+                                task.priority === 'high' ? 'bg-error-100 text-error-800 dark:bg-error-900/20 dark:text-error-400' :
+                                task.priority === 'medium' ? 'bg-warning-100 text-warning-800 dark:bg-warning-900/20 dark:text-warning-400' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                {task.dueDate ? formatDate(task.dueDate) : '-'}
+                              </span>
+                            </div>
+                            <div className="col-span-3">
+                              <div className="flex items-center gap-1">
+                                <span className={`text-xs text-gray-700 dark:text-gray-300 ${!isExpanded && descIsLong ? 'truncate' : ''}`}>
+                                  {displayDesc}
+                                </span>
+                                {descIsLong && (
+                                  <button
+                                    onClick={() => {
+                                      const newSet = new Set(expandedTasks);
+                                      if (newSet.has(task.id)) {
+                                        newSet.delete(task.id);
+                                      } else {
+                                        newSet.add(task.id);
+                                      }
+                                      setExpandedTasks(newSet);
+                                    }}
+                                    className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+                                  >
+                                    {isExpanded ? '▲' : '▼'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Contacts Tab Content */}
+            {activeTab === 'contacts' && (
+              <>
+                {contactsLoading ? (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    Loading contacts...
+                  </div>
+                ) : contacts.length === 0 ? (
+                  <div className="text-center py-3 text-gray-500 dark:text-gray-400 text-sm">
+                    No contacts found
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
+                      <div className="col-span-3">Name</div>
+                      <div className="col-span-3">Email</div>
+                      <div className="col-span-2">Phone</div>
+                      <div className="col-span-2">Title</div>
+                      <div className="col-span-2">Department</div>
+                    </div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                      {contacts.map((contact) => (
+                        <div key={contact.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
+                          <div className="col-span-3">
+                            <span className="text-xs text-gray-900 dark:text-white truncate block">
+                              {contact.firstName} {contact.lastName}
+                            </span>
+                          </div>
+                          <div className="col-span-3">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {contact.email || '-'}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {contact.phone || contact.mobile || '-'}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {contact.title || '-'}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {contact.department || '-'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Opportunities Tab Content */}
+            {activeTab === 'opportunities' && (
+              <>
+                {opportunitiesLoading ? (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    Loading opportunities...
+                  </div>
+                ) : opportunities.length === 0 ? (
+                  <div className="text-center py-3 text-gray-500 dark:text-gray-400 text-sm">
+                    No opportunities found
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
+                      <div className="col-span-4">Name</div>
+                      <div className="col-span-2">Stage</div>
+                      <div className="col-span-2">Amount</div>
+                      <div className="col-span-2">Close Date</div>
+                      <div className="col-span-2">Owner</div>
+                    </div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-600">
+                      {opportunities.map((opp) => (
+                        <div key={opp.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
+                          <div className="col-span-4">
+                            <span className="text-xs text-gray-900 dark:text-white truncate block">
+                              {opp.name}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {opp.stage}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {opp.amount ? `$${opp.amount.toLocaleString()}` : '-'}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {opp.expectedCloseDate ? formatDate(opp.expectedCloseDate) : '-'}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
+                              {getUserName(opp.owner)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

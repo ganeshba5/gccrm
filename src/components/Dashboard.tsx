@@ -2,16 +2,26 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import type { Opportunity } from '../types/opportunity';
+import type { Task } from '../types/task';
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
+import { taskService } from '../services/taskService';
 import type { Account } from '../types/account';
 import NestedDateFilter from './NestedDateFilter';
+import ViewTaskModal from './ViewTaskModal';
+import StageOpportunitiesModal from './StageOpportunitiesModal';
 
 const COLORS = ['#465fff', '#12b76a', '#f79009', '#f04438', '#7a5af8', '#ee46bc'];
 
 export default function Dashboard() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState<string | null>(null);
+  const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   
@@ -57,12 +67,21 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [oppsData, accountsData] = await Promise.all([
+      const [oppsData, accountsData, tasksData] = await Promise.all([
         opportunityService.getAll(),
-        accountService.getAll()
+        accountService.getAll(),
+        taskService.getAll()
       ]);
       setOpportunities(oppsData);
       setAccounts(accountsData);
+      setTasks(tasksData);
+      
+      // Build account names map for tasks
+      const namesMap = new Map<string, string>();
+      accountsData.forEach(account => {
+        namesMap.set(account.id, account.name);
+      });
+      setAccountNames(namesMap);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -197,6 +216,55 @@ export default function Dashboard() {
   const closedWon = opportunitiesByStage['Closed Won'] || 0;
   const totalValue = filteredOpportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
 
+  // Sort tasks: Open (Not Started, In Progress) first, then Closed/Cancelled, sorted by date old to new
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const aIsOpen = a.status === 'not_started' || a.status === 'in_progress';
+    const bIsOpen = b.status === 'not_started' || b.status === 'in_progress';
+    
+    // Open tasks come first
+    if (aIsOpen && !bIsOpen) return -1;
+    if (!aIsOpen && bIsOpen) return 1;
+    
+    // Within same group, sort by date (old to new)
+    const aDate = a.createdAt.getTime();
+    const bDate = b.createdAt.getTime();
+    return aDate - bDate; // Old to new
+  });
+
+  const formatDate = (date: Date | undefined) => {
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsTaskModalOpen(true);
+  };
+
+  const handleCloseTaskModal = () => {
+    setIsTaskModalOpen(false);
+    setSelectedTask(null);
+  };
+
+  const handleStageClick = (stage: string) => {
+    setSelectedStage(stage);
+    setIsStageModalOpen(true);
+  };
+
+  const handleCloseStageModal = () => {
+    setIsStageModalOpen(false);
+    setSelectedStage(null);
+  };
+
+  // Get opportunities for selected stage (using current filters)
+  const getStageOpportunities = (stage: string): Opportunity[] => {
+    return filteredOpportunities.filter(opp => (opp.stage || 'Unknown') === stage);
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Date Filter */}
@@ -300,7 +368,85 @@ export default function Dashboard() {
 
       {/* Dashboard Grid - 4 Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Section 1: Opportunities by Stage Donut Chart */}
+        {/* Section 1: Tasks */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tasks</h3>
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
+            </div>
+          ) : sortedTasks.length > 0 ? (
+            <div className="max-h-96 overflow-y-auto overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-3 py-1.5 text-left align-top text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Due Date</th>
+                    <th className="px-3 py-1.5 text-left align-top text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Priority</th>
+                    <th className="px-3 py-1.5 text-left align-top text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Title</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {sortedTasks.map((task) => {
+                    const priorityColor = 
+                      task.priority === 'high' 
+                        ? 'bg-error-50 dark:bg-error-900/10 border-l-2 border-error-500'
+                        : task.priority === 'medium'
+                        ? 'bg-warning-50 dark:bg-warning-900/10 border-l-2 border-warning-500'
+                        : 'bg-gray-50 dark:bg-gray-700/50 border-l-2 border-gray-300 dark:border-gray-600';
+                    
+                    const accountName = task.accountId ? (accountNames.get(task.accountId) || task.accountId) : '-';
+                    const truncatedAccountName = accountName.length > 30 ? accountName.substring(0, 30) + '...' : accountName;
+                    
+                    return (
+                      <tr
+                        key={task.id}
+                        onClick={() => handleTaskClick(task)}
+                        className={`${priorityColor} hover:opacity-80 cursor-pointer transition-opacity`}
+                      >
+                        <td className="px-3 py-1 text-left align-top">
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              {formatDate(task.dueDate)}
+                            </span>
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap mt-0.5 ${
+                              task.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                              task.status === 'in_progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
+                              task.status === 'cancelled' ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' :
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                            }`}>
+                              {task.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-1 text-left align-top">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 capitalize">
+                              {task.priority}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" title={accountName}>
+                              {truncatedAccountName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-1 text-left align-top">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate block">
+                            {task.title}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+              No tasks found
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Opportunities by Stage Donut Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Opportunities by Stage</h3>
           {loading ? (
@@ -320,6 +466,12 @@ export default function Dashboard() {
                   innerRadius={40}
                   fill="#8884d8"
                   dataKey="value"
+                  onClick={(data: any) => {
+                    if (data && data.name) {
+                      handleStageClick(data.name);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
                 >
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -336,7 +488,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Section 2: Recent Opportunities List */}
+        {/* Section 3: Recent Opportunities List */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Opportunities</h3>
           {loading ? (
@@ -381,28 +533,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Section 3: Stage Distribution (Table) */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Stage Distribution</h3>
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500"></div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {Object.entries(opportunitiesByStage).map(([stage, count]) => (
-                <div key={stage} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span className="font-medium text-gray-700 dark:text-gray-300">{stage}</span>
-                  <span className="text-lg font-bold text-gray-900 dark:text-white">{count}</span>
-                </div>
-              ))}
-              {Object.keys(opportunitiesByStage).length === 0 && (
-                <div className="text-center text-gray-500 dark:text-gray-400 py-8">No data available</div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Section 4: Quick Actions */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
@@ -434,6 +564,28 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* View Task Modal */}
+      {selectedTask && (
+        <ViewTaskModal
+          open={isTaskModalOpen}
+          onClose={handleCloseTaskModal}
+          task={selectedTask}
+          onUpdate={fetchData}
+        />
+      )}
+
+      {/* Stage Drill-Down Modal */}
+      {selectedStage && (
+        <StageOpportunitiesModal
+          open={isStageModalOpen}
+          onClose={handleCloseStageModal}
+          stage={selectedStage}
+          opportunities={getStageOpportunities(selectedStage)}
+          accountNames={accountNames}
+          onOpportunityClick={(oppId) => navigate(`/opportunities/${oppId}/edit`)}
+        />
+      )}
     </div>
   );
 }

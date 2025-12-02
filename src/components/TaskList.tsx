@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Task } from '../types/task';
+import type { User } from '../types/user';
 import { taskService } from '../services/taskService';
+import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 
 export function TaskList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -15,7 +18,19 @@ export function TaskList() {
 
   useEffect(() => {
     loadTasks();
+    loadUsers();
   }, []);
+
+  const loadUsers = async () => {
+    try {
+      const usersData = await userService.getAll();
+      const usersMap = new Map<string, User>();
+      usersData.forEach(u => usersMap.set(u.id, u));
+      setUsers(usersMap);
+    } catch (err) {
+      console.error('Error loading users:', err);
+    }
+  };
 
   const loadTasks = async () => {
     try {
@@ -69,6 +84,18 @@ export function TaskList() {
       default:
         return 'text-gray-500 dark:text-gray-400';
     }
+  };
+
+  const getUserName = (userId: string): string => {
+    if (!userId) return 'Unassigned';
+    const userData = users.get(userId);
+    if (userData) {
+      return userData.displayName || 
+        (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : '') ||
+        userData.email ||
+        userId;
+    }
+    return userId;
   };
 
   if (loading) {
@@ -151,7 +178,7 @@ export function TaskList() {
                   {formatDate(task.dueDate)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {task.assignedTo || 'Unassigned'}
+                  {getUserName(task.assignedTo || '')}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
                   <div className="flex items-center gap-2">

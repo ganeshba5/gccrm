@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Opportunity } from '../types/opportunity';
+import { useAuth } from '../context/AuthContext';
+import { canAccessAllData } from '../lib/auth-helpers';
+import { accountService } from '../services/accountService';
 
 interface OpportunityTableProps {
   opportunities: Opportunity[];
@@ -12,6 +15,7 @@ interface OpportunityTableProps {
 
 export default function OpportunityTable({ opportunities, accountNames, userNames, onEdit, onDelete }: OpportunityTableProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string | null>>(new Set());
   const formatDate = (date: Date | undefined) => {
     if (!date) return '-';
@@ -75,6 +79,37 @@ export default function OpportunityTable({ opportunities, accountNames, userName
     });
   };
 
+  const handleAccountClick = async (accountId: string | null, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent toggling expand/collapse
+    
+    if (!accountId || !user) return;
+    
+    try {
+      // Check permissions for this account
+      const isAdmin = await canAccessAllData();
+      const account = await accountService.getById(accountId);
+      
+      if (account) {
+        // Admin can always edit, or user created the account
+        const canEdit = isAdmin || account.createdBy === user.id;
+        
+        // Navigate to edit or view mode based on permissions
+        if (canEdit) {
+          navigate(`/accounts/${accountId}/edit`);
+        } else {
+          navigate(`/accounts/${accountId}/view`);
+        }
+      } else {
+        // If account not found, default to view mode
+        navigate(`/accounts/${accountId}/view`);
+      }
+    } catch (err) {
+      console.error('Error checking account permissions:', err);
+      // On error, default to view mode
+      navigate(`/accounts/${accountId}/view`);
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse">
@@ -120,7 +155,17 @@ export default function OpportunityTable({ opportunities, accountNames, userName
                           </svg>
                         )}
                       </button>
-                      <span>{accountName}</span>
+                      {accountId ? (
+                        <button
+                          onClick={(e) => handleAccountClick(accountId, e)}
+                          className="text-brand-500 hover:text-brand-600 hover:underline font-semibold dark:text-brand-400 text-left"
+                          title="Click to view/edit account"
+                        >
+                          {accountName}
+                        </button>
+                      ) : (
+                        <span>{accountName}</span>
+                      )}
                       <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                         ({accountOpportunities.length})
                       </span>
