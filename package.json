@@ -14,7 +14,8 @@
     "firebase:deploy:firestore": "npx firebase-tools deploy --only firestore",
     "firebase:deploy:storage": "npx firebase-tools deploy --only storage",
     "script": "ts-node --esm scripts/your-script.ts",
-    "import:excel": "tsx scripts/import-excel.ts"
+    "import:excel": "tsx scripts/import-excel.ts",
+    "fetch:emails": "tsx scripts/fetch-gmail-emails.ts"
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.11.1",
@@ -29,6 +30,7 @@
     "firebase": "^12.5.0",
     "firebase-admin": "^13.6.0",
     "flatpickr": "^4.6.13",
+    "googleapis": "^144.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-flatpickr": "^4.0.11",

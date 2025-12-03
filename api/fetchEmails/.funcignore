@@ -1,0 +1,15 @@
+*.js.map
+*.ts
+.git*
+.vscode
+local.settings.json
+__blobstorage__
+__queuestorage__
+__azurite__
+.python_packages
+.pytest_cache
+.python_version
+__pycache__
+*.pyc
+tsconfig.json
+package-lock.json

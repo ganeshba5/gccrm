@@ -76,6 +76,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (path.startsWith('/users')) {
       return { icon: '👤', title: 'Users' };
     }
+    if (path.startsWith('/emails')) {
+      return { icon: '📧', title: 'Emails' };
+    }
     if (path.startsWith('/settings')) {
       return { icon: '⚙️', title: 'Settings' };
     }
@@ -102,6 +105,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (path.startsWith('/users')) {
       return { label: '+ New User', to: '/users/new' };
     }
+    if (path.startsWith('/emails')) {
+      return null; // No create action for emails
+    }
     return null;
   };
 
@@ -123,6 +129,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Admin menu items (collapsible, admin only)
   const adminMenuItems = [
     { path: '/users', label: 'Users', icon: '👤' },
+    { path: '/emails', label: 'Emails', icon: '📧' },
   ];
 
   // Check if any item in a group is active

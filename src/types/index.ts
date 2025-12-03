@@ -6,6 +6,7 @@ export * from './contact';
 export * from './note';
 export * from './task';
 export * from './role';
+export * from './inboundEmail';
 
 // Legacy exports for backward compatibility (deprecated - use new types)
 /** @deprecated Use Opportunity instead */

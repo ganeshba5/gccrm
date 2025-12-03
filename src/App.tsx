@@ -22,6 +22,7 @@ import { CustomerList } from './components/CustomerList';
 import { CustomerForm } from './components/CustomerForm';
 import { OpportunityNotesPage, AccountNotesPage, ContactNotesPage } from './components/EntityNotesPage';
 import { OpportunityTasksPage, AccountTasksPage, ContactTasksPage } from './components/EntityTasksPage';
+import EmailsDashboard from './components/EmailsDashboard';
 import './App.css';
 
 export default function App() {
@@ -242,6 +243,18 @@ export default function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <UserForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Emails Routes */}
+          <Route
+            path="/emails"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <EmailsDashboard />
                 </DashboardLayout>
               </ProtectedRoute>
             }

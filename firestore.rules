@@ -262,6 +262,29 @@ service cloud.firestore {
       allow delete: if true; // Application validates permissions
     }
     
+    // Inbound Emails collection
+    // Note: Application-level authentication - security handled in app code
+    match /inboundEmails/{emailId} {
+      allow read: if true; // Application validates access (admin only in app)
+      allow list: if true; // Application validates access (admin only in app)
+      allow create: if 
+        request.resource.data.messageId is string &&
+        request.resource.data.from is map &&
+        request.resource.data.to is list &&
+        request.resource.data.subject is string &&
+        request.resource.data.body is map &&
+        request.resource.data.receivedAt is timestamp &&
+        request.resource.data.read is bool &&
+        request.resource.data.processed is bool &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      allow update: if 
+        request.resource.data.messageId == resource.data.messageId &&
+        request.resource.data.receivedAt == resource.data.receivedAt &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if true; // Application validates permissions (admin only)
+    }
+    
     // Legacy collections (for backward compatibility during migration)
     match /leads/{leadId} {
       allow read: if isAuthenticated();

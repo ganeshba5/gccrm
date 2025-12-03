@@ -28,11 +28,19 @@ export default function Dashboard() {
   // Date filter state with localStorage persistence
   const [dateFilterType, setDateFilterType] = useState<string>(() => {
     const saved = localStorage.getItem('dashboard_dateFilterType');
-    return saved || 'all';
+    // If no saved value, default to current year (first time use)
+    if (!saved) {
+      return 'year';
+    }
+    return saved;
   });
   const [dateFilterValue, setDateFilterValue] = useState<string>(() => {
     const saved = localStorage.getItem('dashboard_dateFilterValue');
-    return saved || '';
+    // If no saved value, default to current year (first time use)
+    if (!saved) {
+      return new Date().getFullYear().toString();
+    }
+    return saved;
   });
   const [customStartDate, setCustomStartDate] = useState<string>(() => {
     const saved = localStorage.getItem('dashboard_customStartDate');
@@ -134,12 +142,13 @@ export default function Dashboard() {
     return { start, end };
   };
 
-  // Generate month options (up to 3 months prior)
+  // Generate month options (current month and next 12 months - no prior months)
   const getMonthOptions = (): string[] => {
     const options: string[] = [];
     const now = new Date();
-    for (let i = 0; i < 3; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    // Show current month and next 12 months (total 13 months, covering next 2 years)
+    for (let i = 0; i < 13; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -148,33 +157,36 @@ export default function Dashboard() {
     return options;
   };
 
-  // Generate quarter options (current year and previous year)
+  // Generate quarter options (current year and next 2 years - no prior years)
   const getQuarterOptions = (): string[] => {
     const options: string[] = [];
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
     
-    // Current year quarters up to current quarter
-    for (let q = 1; q <= currentQuarter; q++) {
+    // Current year quarters from current quarter onwards
+    for (let q = currentQuarter; q <= 4; q++) {
       options.push(`${currentYear}-${q}|Q${q} ${currentYear}`);
     }
     
-    // Previous year all quarters
-    for (let q = 1; q <= 4; q++) {
-      options.push(`${currentYear - 1}-${q}|Q${q} ${currentYear - 1}`);
+    // Next 2 years all quarters
+    for (let year = currentYear + 1; year <= currentYear + 2; year++) {
+      for (let q = 1; q <= 4; q++) {
+        options.push(`${year}-${q}|Q${q} ${year}`);
+      }
     }
     
     return options;
   };
 
-  // Generate year options (current year and previous 2 years)
+  // Generate year options (current year and next 2 years - no prior years)
   const getYearOptions = (): string[] => {
     const options: string[] = [];
     const now = new Date();
     const currentYear = now.getFullYear();
+    // Show current year and next 2 years (total 3 years)
     for (let i = 0; i < 3; i++) {
-      const year = currentYear - i;
+      const year = currentYear + i;
       options.push(`${year}|${year}`);
     }
     return options;
@@ -182,14 +194,35 @@ export default function Dashboard() {
 
   // Filter opportunities based on date filter
   const filteredOpportunities = opportunities.filter(opp => {
+    // Date filter (filter by expectedCloseDate within selected range)
     if (dateFilterType !== 'all') {
       const { start, end } = getDateRange();
+      
       if (start && end) {
-        // Only filter if opportunity has an expectedCloseDate
-        if (!opp.expectedCloseDate) return false; // Exclude opportunities without close date
-        
-        const oppDate = new Date(opp.expectedCloseDate);
-        if (!isDateInRange(oppDate, start, end)) return false;
+        // For custom date range, respect the user's explicit range selection (including past dates)
+        if (dateFilterType === 'custom') {
+          // Only filter if opportunity has an expectedCloseDate
+          if (!opp.expectedCloseDate) return false; // Exclude opportunities without close date from date range filter
+          
+          const oppDate = new Date(opp.expectedCloseDate);
+          if (!isDateInRange(oppDate, start, end)) return false;
+        } else {
+          // For month/quarter/year filters, apply Expected Close Date filter: Only show opportunities where Expected Close Date >= current date OR Expected Close Date is null
+          const currentDate = new Date();
+          currentDate.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+          
+          if (opp.expectedCloseDate) {
+            const oppDate = new Date(opp.expectedCloseDate);
+            oppDate.setHours(0, 0, 0, 0);
+            
+            // Must be >= current date AND within the selected range
+            if (oppDate < currentDate) return false; // Exclude past opportunities
+            if (!isDateInRange(oppDate, start, end)) return false;
+          } else {
+            // Opportunities without expectedCloseDate are included (null is allowed)
+            // But they still need to pass other filters if any
+          }
+        }
       }
     }
     
