@@ -540,16 +540,16 @@ export default function Dashboard() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
           <div className="space-y-3">
             <button
-              onClick={() => navigate('/opportunities')}
-              className="w-full px-4 py-3 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors font-medium"
-            >
-              + Add New Opportunity
-            </button>
-            <button
               onClick={() => navigate('/accounts/new')}
               className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
             >
               + Add New Account
+            </button>
+            <button
+              onClick={() => navigate('/opportunities')}
+              className="w-full px-4 py-3 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors font-medium"
+            >
+              + Add New Opportunity
             </button>
             <button
               onClick={() => navigate('/contacts/new')}

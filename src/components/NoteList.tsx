@@ -166,9 +166,16 @@ export function NoteList() {
     });
   };
 
+  // Strip HTML tags to get plain text
+  const stripHtmlTags = (html: string): string => {
+    return html.replace(/<[^>]*>/g, '');
+  };
+
   const truncateContent = (content: string, maxLength: number = 100): string => {
-    if (content.length <= maxLength) return content;
-    return content.substring(0, maxLength) + '...';
+    // Strip HTML first, then truncate
+    const textContent = stripHtmlTags(content);
+    if (textContent.length <= maxLength) return textContent;
+    return textContent.substring(0, maxLength) + '...';
   };
 
   if (loading) {
@@ -236,7 +243,7 @@ export function NoteList() {
             <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               <div className="col-span-2">Entity</div>
               <div className="col-span-2">Created By</div>
-              <div className="col-span-4">Content</div>
+              <div className="col-span-4 text-left">Content</div>
               <div className="col-span-2">Date</div>
               <div className="col-span-1">Status</div>
               <div className="col-span-1">Actions</div>
@@ -245,9 +252,11 @@ export function NoteList() {
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {notes.map((note) => {
                 const isExpanded = expandedNotes.has(note.id);
-                const contentIsLong = note.content.length > 100;
+                // Strip HTML tags from content for display
+                const textContent = stripHtmlTags(note.content);
+                const contentIsLong = textContent.length > 100;
                 const displayContent = isExpanded || !contentIsLong 
-                  ? note.content 
+                  ? textContent 
                   : truncateContent(note.content, 100);
                 
                 return (
@@ -264,7 +273,7 @@ export function NoteList() {
                     </div>
                     <div className="col-span-4">
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm text-gray-700 dark:text-gray-300 ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
+                        <span className={`text-sm text-gray-700 dark:text-gray-300 text-left ${!isExpanded && contentIsLong ? 'truncate' : ''} ${isExpanded ? 'line-clamp-2' : ''}`}>
                           {displayContent}
                         </span>
                         {contentIsLong && (

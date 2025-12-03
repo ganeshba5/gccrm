@@ -188,9 +188,16 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
     });
   };
 
+  // Strip HTML tags to get plain text
+  const stripHtmlTags = (html: string): string => {
+    return html.replace(/<[^>]*>/g, '');
+  };
+
   const truncateContent = (content: string, maxLength: number = 100): string => {
-    if (content.length <= maxLength) return content;
-    return content.substring(0, maxLength) + '...';
+    // Strip HTML first, then truncate
+    const textContent = stripHtmlTags(content);
+    if (textContent.length <= maxLength) return textContent;
+    return textContent.substring(0, maxLength) + '...';
   };
 
   const getEntityName = (): string => {
@@ -313,7 +320,9 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {notes.map((note) => {
                 const isExpanded = expandedNotes.has(note.id);
-                const contentIsLong = note.content.length > 100;
+                // Strip HTML tags from content for display
+                const textContent = stripHtmlTags(note.content);
+                const contentIsLong = textContent.length > 100;
                 const isEditing = editingNoteId === note.id;
                 
                 if (isEditing) {
@@ -366,7 +375,7 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
                 }
 
                 const displayContent = isExpanded || !contentIsLong 
-                  ? note.content 
+                  ? textContent 
                   : truncateContent(note.content, 100);
                 
                 return (
