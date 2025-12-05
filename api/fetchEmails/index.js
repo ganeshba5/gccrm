@@ -210,13 +210,18 @@ async function fetchNewEmails() {
 }
 // Azure Function entry point (HTTP trigger for Static Web Apps compatibility)
 // This function can be called via HTTP and scheduled using GitHub Actions
-module.exports = async function (req, context) {
+// Note: Azure Functions v1 uses context.res to set the response
+module.exports = async function (context, req) {
     const timeStamp = new Date().toISOString();
     context.log(`Email fetch HTTP trigger called at ${timeStamp}`);
     // Optional: Add authentication check here
     // const authHeader = req.headers['x-functions-key'];
     // if (authHeader !== process.env.FUNCTION_KEY) {
-    //   return { status: 401, body: 'Unauthorized' };
+    //   context.res = {
+    //     status: 401,
+    //     body: { error: 'Unauthorized' }
+    //   };
+    //   return;
     // }
     try {
         // Validate environment variables
@@ -233,8 +238,11 @@ module.exports = async function (req, context) {
         if (missingVars.length > 0) {
             const errorMsg = `Missing required environment variables: ${missingVars.join(', ')}`;
             context.log.error(errorMsg);
-            return {
+            context.res = {
                 status: 500,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: {
                     success: false,
                     error: errorMsg,
@@ -242,13 +250,17 @@ module.exports = async function (req, context) {
                     timestamp: timeStamp
                 }
             };
+            return;
         }
         // Check Firebase initialization
         if (!db) {
             const errorMsg = 'Firebase Admin not initialized';
             context.log.error(errorMsg);
-            return {
+            context.res = {
                 status: 500,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: {
                     success: false,
                     error: errorMsg,
@@ -256,12 +268,16 @@ module.exports = async function (req, context) {
                     timestamp: timeStamp
                 }
             };
+            return;
         }
         context.log('Starting email fetch...');
         const result = await fetchNewEmails();
         context.log(`✅ Email fetch complete! Stored: ${result.stored}, Skipped: ${result.skipped}`);
-        return {
+        context.res = {
             status: 200,
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: {
                 success: true,
                 message: 'Email fetch completed',
@@ -276,11 +292,15 @@ module.exports = async function (req, context) {
         const errorStack = error.stack || '';
         context.log.error(`❌ Error fetching emails: ${errorMsg}`);
         context.log.error(`Stack trace: ${errorStack}`);
-        return {
+        context.res = {
             status: 500,
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: {
                 success: false,
                 error: errorMsg,
+                stack: process.env.NODE_ENV === 'development' ? errorStack : undefined,
                 timestamp: timeStamp
             }
         };

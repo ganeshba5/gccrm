@@ -40,17 +40,37 @@ jobs:
           
           echo "Calling email fetch function at: $FUNCTION_URL"
           
-          # Use curl with -L to follow redirects and handle HTTPS properly
-          response=$(curl -s -L -w "\n%{http_code}" -X POST "$FUNCTION_URL" \
+          # Use curl with verbose output for debugging, then extract response
+          # Save full output to temp file for better error handling
+          temp_file=$(mktemp)
+          http_code=$(curl -s -L -w "%{http_code}" -o "$temp_file" -X POST "$FUNCTION_URL" \
             -H "Content-Type: application/json" \
             -H "User-Agent: GitHub-Actions-Email-Fetch/1.0" \
-            --max-time 300)
+            --max-time 300 \
+            --show-error \
+            --fail-with-body 2>&1 || echo "CURL_ERROR:$?")
           
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | sed '$d')
+          # Check if curl failed
+          if [[ "$http_code" == CURL_ERROR:* ]]; then
+            echo "❌ curl command failed"
+            cat "$temp_file"
+            rm -f "$temp_file"
+            exit 1
+          fi
+          
+          body=$(cat "$temp_file")
+          rm -f "$temp_file"
           
           echo "Response code: $http_code"
-          echo "Response body: $body"
+          echo "Response body:"
+          echo "$body" | head -50
+          
+          # Try to parse JSON response if available
+          if command -v jq &> /dev/null; then
+            echo ""
+            echo "Parsed response:"
+            echo "$body" | jq '.' 2>/dev/null || echo "$body"
+          fi
           
           # Accept both 200 (OK) and 201 (Created) as success
           if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
