@@ -208,17 +208,40 @@ async function fetchNewEmails() {
     }
     return { stored, skipped };
 }
-// Azure Function entry point (v1 programming model for Static Web Apps)
-module.exports = async function (myTimer, context) {
+// Azure Function entry point (HTTP trigger for Static Web Apps compatibility)
+// This function can be called via HTTP and scheduled using GitHub Actions
+module.exports = async function (req, context) {
     const timeStamp = new Date().toISOString();
-    context.log(`Email fetch timer triggered at ${timeStamp}`);
+    context.log(`Email fetch HTTP trigger called at ${timeStamp}`);
+    // Optional: Add authentication check here
+    // const authHeader = req.headers['x-functions-key'];
+    // if (authHeader !== process.env.FUNCTION_KEY) {
+    //   return { status: 401, body: 'Unauthorized' };
+    // }
     try {
         const result = await fetchNewEmails();
         context.log(`✅ Email fetch complete! Stored: ${result.stored}, Skipped: ${result.skipped}`);
+        return {
+            status: 200,
+            body: {
+                success: true,
+                message: 'Email fetch completed',
+                stored: result.stored,
+                skipped: result.skipped,
+                timestamp: timeStamp
+            }
+        };
     }
     catch (error) {
         context.log.error(`❌ Error fetching emails: ${error.message}`);
-        throw error;
+        return {
+            status: 500,
+            body: {
+                success: false,
+                error: error.message,
+                timestamp: timeStamp
+            }
+        };
     }
 };
 //# sourceMappingURL=index.js.map

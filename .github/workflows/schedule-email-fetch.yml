@@ -1,0 +1,52 @@
+name: Schedule Email Fetch
+
+on:
+  schedule:
+    # Run every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  fetch_emails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Emails via HTTP
+        run: |
+          # Get the Static Web App URL from environment or use a secret
+          SWA_URL="${SWA_URL:-${{ secrets.AZURE_STATIC_WEB_APP_URL }}}"
+          
+          if [ -z "$SWA_URL" ]; then
+            echo "Error: Azure Static Web App URL not configured"
+            echo "Set AZURE_STATIC_WEB_APP_URL secret in GitHub repository settings"
+            exit 1
+          fi
+          
+          # Call the HTTP trigger endpoint
+          # The function will be available at: https://<your-app>.azurestaticapps.net/api/fetchEmails
+          FUNCTION_URL="${SWA_URL}/api/fetchEmails"
+          
+          # Optional: Add function key if you set up authentication
+          # FUNCTION_KEY="${{ secrets.AZURE_FUNCTION_KEY }}"
+          # curl -X POST "$FUNCTION_URL" \
+          #   -H "x-functions-key: $FUNCTION_KEY" \
+          #   -H "Content-Type: application/json"
+          
+          echo "Calling email fetch function at: $FUNCTION_URL"
+          response=$(curl -s -w "\n%{http_code}" -X POST "$FUNCTION_URL" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: GitHub-Actions-Email-Fetch/1.0")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "Response code: $http_code"
+          echo "Response body: $body"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Email fetch completed successfully"
+            exit 0
+          else
+            echo "❌ Email fetch failed with HTTP $http_code"
+            exit 1
+          fi
+
