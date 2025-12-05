@@ -298,12 +298,62 @@ async function findOrCreateTaskForOpportunity(
 }
 
 /**
+ * Build opportunity description with new format
+ */
+function buildOpportunityDescription(
+  company: string,
+  companySize: string | undefined,
+  companyRevenue: string | undefined,
+  industry: string | undefined,
+  cq1Response: string | undefined,
+  cq2Response: string | undefined,
+  cq3Response: string
+): string {
+  // Start with the base description (keep the CQ3 response as the first line)
+  let description = `Lead from DemandFactor. ${getStringValue(cq3Response)}`;
+  
+  // Build Company details
+  const companyParts: string[] = [];
+  if (company) companyParts.push(getStringValue(company));
+  if (companySize) companyParts.push(getStringValue(companySize));
+  if (companyRevenue) companyParts.push(getStringValue(companyRevenue));
+  if (industry) companyParts.push(getStringValue(industry));
+  
+  if (companyParts.length > 0) {
+    description += `\n\nCompany: ${companyParts.join(', ')}`;
+  }
+  
+  // CQ1 Response
+  if (cq1Response) {
+    description += `\nCQ1: ${getStringValue(cq1Response)}`;
+  }
+  
+  // CQ2 Response
+  if (cq2Response) {
+    description += `\nCQ2: ${getStringValue(cq2Response)}`;
+  }
+  
+  // CQ3 Response
+  if (cq3Response) {
+    description += `\nCQ3: ${getStringValue(cq3Response)}`;
+  }
+  
+  return description;
+}
+
+/**
  * Find or create opportunity if budget is approved
  * Returns { opportunityId, wasCreated } or null if budget not approved
  */
 async function findOrCreateOpportunity(
   accountId: string,
   contactName: string,
+  company: string,
+  companySize: string | undefined,
+  companyRevenue: string | undefined,
+  industry: string | undefined,
+  cq1Response: string | undefined,
+  cq2Response: string | undefined,
   cq3Response: string,
   owner: string,
   createdBy: string
@@ -343,6 +393,17 @@ async function findOrCreateOpportunity(
     
     const now = Timestamp.now();
     
+    // Build description with new format
+    const description = buildOpportunityDescription(
+      company,
+      companySize,
+      companyRevenue,
+      industry,
+      cq1Response,
+      cq2Response,
+      cq3Response
+    );
+    
     const opportunityData: any = {
       name: opportunityName,
       accountId: accountId,
@@ -351,7 +412,7 @@ async function findOrCreateOpportunity(
       createdBy: createdBy,
       createdAt: now,
       updatedAt: now,
-      description: `Lead from DemandFactor. ${cq3Response}`,
+      description: description,
     };
     
     if (expectedCloseDate) {
@@ -658,9 +719,17 @@ async function importDemandFactorCSV(filePath: string) {
       
       // Find or create opportunity if budget approved
       const contactName = `${firstName} ${lastName}`.trim() || 'Contact';
+      const cq1Response = getOptionalStringValue(row['CQ 1 response']);
+      const cq2Response = getOptionalStringValue(row['CQ 2 response']);
       const opportunityResult = await findOrCreateOpportunity(
         accountResult.accountId,
         contactName,
+        company,
+        companySize,
+        companyRevenue,
+        industry,
+        cq1Response,
+        cq2Response,
         cq3Response || '',
         adminUserId,
         adminUserId

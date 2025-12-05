@@ -669,7 +669,7 @@ export function AccountForm() {
               name="description"
               value={formData.description || ''}
               onChange={handleInputChange}
-              rows={4}
+              rows={6}
               disabled={isReadOnly}
               className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
             />

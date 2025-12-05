@@ -627,7 +627,7 @@ export default function EditOpportunityModal({
                 value={description} 
                 onChange={e => setDescription(e.target.value)} 
                 className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
-                rows={2}
+                rows={6}
                 disabled={loading}
               />
             </div>
