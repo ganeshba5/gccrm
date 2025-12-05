@@ -65,6 +65,38 @@ interface GmailMessage {
 async function getGmailClient() {
   try {
     // Try service account with domain-wide delegation first (recommended for production)
+    // Option 1: Service account key as JSON string in environment variable
+    const serviceAccountKeyEnv = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (serviceAccountKeyEnv && serviceAccountKeyEnv.trim().length > 0) {
+      try {
+        console.log('   Using service account from environment variable...');
+        const serviceAccount = JSON.parse(serviceAccountKeyEnv);
+        
+        if (!serviceAccount.client_email || !serviceAccount.private_key) {
+          throw new Error('Service account key missing required fields (client_email or private_key)');
+        }
+        
+        const jwtClient = new google.auth.JWT(
+          serviceAccount.client_email,
+          undefined,
+          serviceAccount.private_key,
+          ['https://www.googleapis.com/auth/gmail.readonly'],
+          GMAIL_USER_EMAIL
+        );
+
+        await jwtClient.authorize();
+        const gmail = google.gmail({ version: 'v1', auth: jwtClient });
+        console.log('   ✅ Service account authentication successful\n');
+        return gmail;
+      } catch (parseError: any) {
+        console.error('   ⚠️  Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', parseError.message);
+        console.error('   Falling back to file-based authentication...\n');
+      }
+    } else {
+      console.log('   ℹ️  GOOGLE_SERVICE_ACCOUNT_KEY not set, checking for file-based key...');
+    }
+
+    // Option 2: Service account key from file
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS ||
       join(process.cwd(), 'scripts', 'serviceAccountKey.json');
 
@@ -87,7 +119,7 @@ async function getGmailClient() {
 
     // Try OAuth2 approach as fallback
     if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN) {
-      console.log('   Using OAuth2 credentials...');
+      console.log('   ⚠️  No service account found, using OAuth2 credentials (not recommended)...');
       const oauth2Client = new google.auth.OAuth2(
         GMAIL_CLIENT_ID,
         GMAIL_CLIENT_SECRET,
