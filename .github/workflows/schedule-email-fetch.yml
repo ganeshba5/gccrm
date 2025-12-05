@@ -10,78 +10,34 @@ jobs:
   fetch_emails:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch Emails via HTTP
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run email fetch script
+        env:
+          GMAIL_USER_EMAIL: ${{ secrets.GMAIL_USER_EMAIL }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          FIREBASE_ADMIN_PROJECT_ID: ${{ secrets.FIREBASE_ADMIN_PROJECT_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
         run: |
-          # Get the Static Web App URL from environment or use a secret
-          SWA_URL="${SWA_URL:-${{ secrets.AZURE_STATIC_WEB_APP_URL }}}"
+          echo "Starting email fetch..."
+          npm run fetch:emails || npx tsx scripts/fetch-gmail-emails.ts
           
-          if [ -z "$SWA_URL" ]; then
-            echo "Error: Azure Static Web App URL not configured"
-            echo "Set AZURE_STATIC_WEB_APP_URL secret in GitHub repository settings"
-            exit 1
-          fi
-          
-          # Call the HTTP trigger endpoint
-          # The function will be available at: https://<your-app>.azurestaticapps.net/api/fetchEmails
-          FUNCTION_URL="${SWA_URL}/api/fetchEmails"
-          
-          # Optional: Add function key if you set up authentication
-          # FUNCTION_KEY="${{ secrets.AZURE_FUNCTION_KEY }}"
-          # curl -X POST "$FUNCTION_URL" \
-          #   -H "x-functions-key: $FUNCTION_KEY" \
-          #   -H "Content-Type: application/json"
-          
-          # Ensure URL uses HTTPS
-          FUNCTION_URL="${FUNCTION_URL/http:/https:}"
-          FUNCTION_URL="${FUNCTION_URL#http://}"
-          if [[ ! "$FUNCTION_URL" =~ ^https:// ]]; then
-            FUNCTION_URL="https://${FUNCTION_URL}"
-          fi
-          
-          echo "Calling email fetch function at: $FUNCTION_URL"
-          
-          # Use curl with verbose output for debugging, then extract response
-          # Save full output to temp file for better error handling
-          temp_file=$(mktemp)
-          http_code=$(curl -s -L -w "%{http_code}" -o "$temp_file" -X POST "$FUNCTION_URL" \
-            -H "Content-Type: application/json" \
-            -H "User-Agent: GitHub-Actions-Email-Fetch/1.0" \
-            --max-time 300 \
-            --show-error \
-            --fail-with-body 2>&1 || echo "CURL_ERROR:$?")
-          
-          # Check if curl failed
-          if [[ "$http_code" == CURL_ERROR:* ]]; then
-            echo "❌ curl command failed"
-            cat "$temp_file"
-            rm -f "$temp_file"
-            exit 1
-          fi
-          
-          body=$(cat "$temp_file")
-          rm -f "$temp_file"
-          
-          echo "Response code: $http_code"
-          echo "Response body:"
-          echo "$body" | head -50
-          
-          # Try to parse JSON response if available
-          if command -v jq &> /dev/null; then
-            echo ""
-            echo "Parsed response:"
-            echo "$body" | jq '.' 2>/dev/null || echo "$body"
-          fi
-          
-          # Accept both 200 (OK) and 201 (Created) as success
-          if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+          if [ $? -eq 0 ]; then
             echo "✅ Email fetch completed successfully"
-            exit 0
-          elif [ "$http_code" -eq 301 ] || [ "$http_code" -eq 302 ]; then
-            echo "⚠️  Redirect detected (HTTP $http_code). The URL may need to be updated."
-            echo "Please verify the Static Web App URL in GitHub secrets."
-            exit 1
           else
-            echo "❌ Email fetch failed with HTTP $http_code"
+            echo "❌ Email fetch failed"
             exit 1
           fi
 
