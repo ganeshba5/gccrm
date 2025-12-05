@@ -23,15 +23,25 @@ jobs:
       
       - name: Run email fetch script
         env:
+          # Service Account (recommended - set GOOGLE_SERVICE_ACCOUNT_KEY as JSON string)
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          # OAuth2 (alternative - if Service Account not available)
           GMAIL_USER_EMAIL: ${{ secrets.GMAIL_USER_EMAIL }}
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
           GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
           GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          # Firebase
           FIREBASE_ADMIN_PROJECT_ID: ${{ secrets.FIREBASE_ADMIN_PROJECT_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
         run: |
           echo "Starting email fetch..."
+          echo "Checking environment variables..."
+          if [ -n "$GOOGLE_SERVICE_ACCOUNT_KEY" ]; then
+            echo "✅ GOOGLE_SERVICE_ACCOUNT_KEY is set (length: ${#GOOGLE_SERVICE_ACCOUNT_KEY} chars)"
+            echo "First 50 chars: ${GOOGLE_SERVICE_ACCOUNT_KEY:0:50}..."
+          else
+            echo "❌ GOOGLE_SERVICE_ACCOUNT_KEY is NOT set"
+          fi
           npm run fetch:emails || npx tsx scripts/fetch-gmail-emails.ts
           
           if [ $? -eq 0 ]; then

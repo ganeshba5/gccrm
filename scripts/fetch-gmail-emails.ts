@@ -70,7 +70,9 @@ async function getGmailClient() {
     if (serviceAccountKeyEnv && serviceAccountKeyEnv.trim().length > 0) {
       try {
         console.log('   Using service account from environment variable...');
-        const serviceAccount = JSON.parse(serviceAccountKeyEnv);
+        console.log(`   Key length: ${serviceAccountKeyEnv.length} characters`);
+        const trimmedKey = serviceAccountKeyEnv.trim();
+        const serviceAccount = JSON.parse(trimmedKey);
         
         if (!serviceAccount.client_email || !serviceAccount.private_key) {
           throw new Error('Service account key missing required fields (client_email or private_key)');
