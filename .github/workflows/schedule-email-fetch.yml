@@ -31,10 +31,20 @@ jobs:
           #   -H "x-functions-key: $FUNCTION_KEY" \
           #   -H "Content-Type: application/json"
           
+          # Ensure URL uses HTTPS
+          FUNCTION_URL="${FUNCTION_URL/http:/https:}"
+          FUNCTION_URL="${FUNCTION_URL#http://}"
+          if [[ ! "$FUNCTION_URL" =~ ^https:// ]]; then
+            FUNCTION_URL="https://${FUNCTION_URL}"
+          fi
+          
           echo "Calling email fetch function at: $FUNCTION_URL"
-          response=$(curl -s -w "\n%{http_code}" -X POST "$FUNCTION_URL" \
+          
+          # Use curl with -L to follow redirects and handle HTTPS properly
+          response=$(curl -s -L -w "\n%{http_code}" -X POST "$FUNCTION_URL" \
             -H "Content-Type: application/json" \
-            -H "User-Agent: GitHub-Actions-Email-Fetch/1.0")
+            -H "User-Agent: GitHub-Actions-Email-Fetch/1.0" \
+            --max-time 300)
           
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
@@ -42,9 +52,14 @@ jobs:
           echo "Response code: $http_code"
           echo "Response body: $body"
           
-          if [ "$http_code" -eq 200 ]; then
+          # Accept both 200 (OK) and 201 (Created) as success
+          if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             echo "✅ Email fetch completed successfully"
             exit 0
+          elif [ "$http_code" -eq 301 ] || [ "$http_code" -eq 302 ]; then
+            echo "⚠️  Redirect detected (HTTP $http_code). The URL may need to be updated."
+            echo "Please verify the Static Web App URL in GitHub secrets."
+            exit 1
           else
             echo "❌ Email fetch failed with HTTP $http_code"
             exit 1
