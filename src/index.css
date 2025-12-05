@@ -188,6 +188,28 @@ layer(base);
   body {
     @apply relative font-normal font-outfit z-1 bg-gray-50;
   }
+  /* Default left alignment for common text elements */
+  div,
+  p,
+  span,
+  label,
+  h1, h2, h3, h4, h5, h6,
+  li,
+  td,
+  th,
+  .text-left {
+    text-align: left;
+  }
+  /* Allow explicit overrides via Tailwind classes */
+  .text-center {
+    text-align: center !important;
+  }
+  .text-right {
+    text-align: right !important;
+  }
+  .text-justify {
+    text-align: justify !important;
+  }
 }
 
 @utility menu-item {

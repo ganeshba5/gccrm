@@ -29,7 +29,7 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white text-left">
             Email Details
           </h2>
           <button
@@ -47,10 +47,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {/* From */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
               From
             </label>
-            <div className="text-sm text-gray-900 dark:text-white">
+            <div className="text-sm text-gray-900 dark:text-white text-left">
               {email.from.name && (
                 <div className="font-medium">{email.from.name}</div>
               )}
@@ -60,10 +60,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
 
           {/* To */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
               To
             </label>
-            <div className="text-sm text-gray-900 dark:text-white">
+            <div className="text-sm text-gray-900 dark:text-white text-left">
               {formatEmailList(email.to)}
             </div>
           </div>
@@ -71,10 +71,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* CC */}
           {email.cc && email.cc.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 CC
               </label>
-              <div className="text-sm text-gray-900 dark:text-white">
+              <div className="text-sm text-gray-900 dark:text-white text-left">
                 {formatEmailList(email.cc)}
               </div>
             </div>
@@ -83,10 +83,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* BCC */}
           {email.bcc && email.bcc.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 BCC
               </label>
-              <div className="text-sm text-gray-900 dark:text-white">
+              <div className="text-sm text-gray-900 dark:text-white text-left">
                 {formatEmailList(email.bcc)}
               </div>
             </div>
@@ -94,30 +94,30 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
 
           {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
               Subject
             </label>
-            <div className="text-sm text-gray-900 dark:text-white">
+            <div className="text-sm text-gray-900 dark:text-white text-left">
               {email.subject || '(No Subject)'}
             </div>
           </div>
 
           {/* Received Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
               Received
             </label>
-            <div className="text-sm text-gray-900 dark:text-white">
+            <div className="text-sm text-gray-900 dark:text-white text-left">
               {formatDate(email.receivedAt)}
             </div>
           </div>
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
               Status
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-left">
               {email.read ? (
                 <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 rounded">
                   Read
@@ -138,10 +138,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* Linked To */}
           {email.linkedTo && (email.linkedTo.accountId || email.linkedTo.contactId || email.linkedTo.opportunityId || email.linkedTo.noteId) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 Linked To
               </label>
-              <div className="text-sm text-gray-900 dark:text-white space-y-1">
+              <div className="text-sm text-gray-900 dark:text-white space-y-1 text-left">
                 {email.linkedTo.accountId && (
                   <div>Account: {email.linkedTo.accountId}</div>
                 )}
@@ -161,10 +161,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* Labels */}
           {email.labels && email.labels.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 Labels
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 text-left">
                 {email.labels.map((label, index) => (
                   <span
                     key={index}
@@ -180,17 +180,17 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* Attachments */}
           {email.attachments && email.attachments.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 Attachments ({email.attachments.length})
               </label>
-              <div className="space-y-2">
+              <div className="space-y-2 text-left">
                 {email.attachments.map((attachment) => (
                   <div
                     key={attachment.id}
                     className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
                   >
                     <span className="text-sm">📎</span>
-                    <div className="flex-1">
+                    <div className="flex-1 text-left">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {attachment.filename}
                       </div>
@@ -217,11 +217,11 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* Body - HTML */}
           {email.body.html && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 Content (HTML)
               </label>
               <div
-                className="text-sm text-gray-900 dark:text-white prose prose-sm dark:prose-invert max-w-none border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900"
+                className="text-sm text-gray-900 dark:text-white prose prose-sm dark:prose-invert max-w-none border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900 text-left"
                 dangerouslySetInnerHTML={{ __html: email.body.html }}
               />
             </div>
@@ -230,10 +230,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* Body - Text (if no HTML) */}
           {!email.body.html && email.body.text && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 Content
               </label>
-              <div className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+              <div className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900 text-left">
                 {email.body.text}
               </div>
             </div>
@@ -242,10 +242,10 @@ export default function EmailDetailModal({ email, isOpen, onClose }: EmailDetail
           {/* No Content */}
           {!email.body.html && !email.body.text && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">
                 Content
               </label>
-              <div className="text-sm text-gray-500 dark:text-gray-400 italic">
+              <div className="text-sm text-gray-500 dark:text-gray-400 italic text-left">
                 No content available
               </div>
             </div>
