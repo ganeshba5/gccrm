@@ -1,4 +1,4 @@
-// Firebase Cloud Function to set custom claims for user roles
+// Firebase Cloud Functions
 // Deploy this to Firebase Functions
 
 import * as functions from 'firebase-functions';
@@ -6,9 +6,10 @@ import * as admin from 'firebase-admin';
 
 admin.initializeApp();
 
-exports.addRole = functions.https.onCall(async (data, context) => {
+// Export addRole function
+exports.addRole = functions.https.onCall(async (data: any, context: any) => {
   // Check if request is made by an authenticated admin
-  if (!context.auth?.token.roles?.admin) {
+  if (!context || !context.auth || !(context.auth.token as any)?.roles?.admin) {
     throw new functions.https.HttpsError(
       'permission-denied',
       'Only admins can modify roles.'
@@ -16,7 +17,8 @@ exports.addRole = functions.https.onCall(async (data, context) => {
   }
 
   // Validate data
-  const { userId, role } = data;
+  const userId = data?.userId;
+  const role = data?.role;
   if (!userId || !role || !['admin', 'sales'].includes(role)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
@@ -54,3 +56,7 @@ exports.addRole = functions.https.onCall(async (data, context) => {
     );
   }
 });
+
+// Export fetchEmails function
+import { fetchEmails } from './fetchEmails';
+exports.fetchEmails = fetchEmails;

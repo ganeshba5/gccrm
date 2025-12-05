@@ -80,6 +80,17 @@ Found 5 leads with status: New
 
 ## Available Scripts
 
+### Test Firebase Cloud Function
+
+- `test-fetch-emails-function.ts` - Test the fetchEmails Firebase Cloud Function
+  ```bash
+  npm run test:fetch-emails
+  # Or with custom URL:
+  FUNCTION_URL=https://us-central1-gccrmapp.cloudfunctions.net/fetchEmails npm run test:fetch-emails
+  ```
+
+## Available Scripts
+
 ### Query Scripts
 
 - `leadsbystatus.ts` - Query and display leads filtered by status

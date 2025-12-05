@@ -13,9 +13,13 @@
     "firebase:deploy:indexes": "npx firebase-tools deploy --only firestore:indexes",
     "firebase:deploy:firestore": "npx firebase-tools deploy --only firestore",
     "firebase:deploy:storage": "npx firebase-tools deploy --only storage",
+    "firebase:deploy:functions": "npx firebase-tools deploy --only functions",
+    "firebase:deploy:fetchEmails": "npx firebase-tools deploy --only functions:fetchEmails",
+    "firebase:functions:list": "npx firebase-tools functions:list",
     "script": "ts-node --esm scripts/your-script.ts",
     "import:excel": "tsx scripts/import-excel.ts",
-    "fetch:emails": "tsx scripts/fetch-gmail-emails.ts"
+    "fetch:emails": "tsx scripts/fetch-gmail-emails.ts",
+    "test:fetch-emails": "tsx scripts/test-fetch-emails-function.ts"
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.11.1",

@@ -10,46 +10,37 @@ jobs:
   fetch_emails:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Run email fetch script
+      - name: Call Firebase Cloud Function
         env:
-          # Service Account (recommended - set GOOGLE_SERVICE_ACCOUNT_KEY as JSON string)
-          # This same key is used for both Gmail API and Firebase Admin
-          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-          # OAuth2 (alternative - if Service Account not available)
-          GMAIL_USER_EMAIL: ${{ secrets.GMAIL_USER_EMAIL }}
-          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
-          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
-          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
-          # Firebase
-          FIREBASE_ADMIN_PROJECT_ID: ${{ secrets.FIREBASE_ADMIN_PROJECT_ID }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          FUNCTION_URL: ${{ secrets.FIREBASE_FUNCTION_URL || 'https://us-central1-gccrmapp.cloudfunctions.net/fetchEmails' }}
+          FUNCTION_SECRET: ${{ secrets.FIREBASE_FUNCTION_SECRET }}
         run: |
-          echo "Starting email fetch..."
-          echo "Checking environment variables..."
-          if [ -n "$GOOGLE_SERVICE_ACCOUNT_KEY" ]; then
-            echo "✅ GOOGLE_SERVICE_ACCOUNT_KEY is set (length: ${#GOOGLE_SERVICE_ACCOUNT_KEY} chars)"
-            echo "First 50 chars: ${GOOGLE_SERVICE_ACCOUNT_KEY:0:50}..."
-          else
-            echo "❌ GOOGLE_SERVICE_ACCOUNT_KEY is NOT set"
-          fi
-          npm run fetch:emails || npx tsx scripts/fetch-gmail-emails.ts
+          echo "🧪 Calling Firebase Cloud Function: fetchEmails"
+          echo "📍 Function URL: $FUNCTION_URL"
           
-          if [ $? -eq 0 ]; then
+          # Prepare headers
+          HEADERS=(-H "Content-Type: application/json")
+          if [ -n "$FUNCTION_SECRET" ]; then
+            HEADERS+=(-H "Authorization: Bearer $FUNCTION_SECRET")
+            echo "🔐 Using authentication token"
+          fi
+          
+          # Call the function
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${HEADERS[@]}" "$FUNCTION_URL" || echo -e "\n000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo ""
+          echo "📥 Response received"
+          echo "Status: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Email fetch completed successfully"
+            echo "$BODY" | jq '.' 2>/dev/null || echo "$BODY"
+            exit 0
           else
             echo "❌ Email fetch failed"
+            echo "Response body:"
+            echo "$BODY" | jq '.' 2>/dev/null || echo "$BODY"
             exit 1
           fi
-
