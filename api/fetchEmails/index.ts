@@ -280,6 +280,48 @@ module.exports = async function (req: any, context: any): Promise<any> {
   // }
 
   try {
+    // Validate environment variables
+    const missingVars: string[] = [];
+    if (!GMAIL_CLIENT_ID && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      missingVars.push('GMAIL_CLIENT_ID or GOOGLE_APPLICATION_CREDENTIALS');
+    }
+    if (!GMAIL_CLIENT_SECRET && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      missingVars.push('GMAIL_CLIENT_SECRET or GOOGLE_APPLICATION_CREDENTIALS');
+    }
+    if (!GMAIL_REFRESH_TOKEN && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      missingVars.push('GMAIL_REFRESH_TOKEN or GOOGLE_APPLICATION_CREDENTIALS');
+    }
+
+    if (missingVars.length > 0) {
+      const errorMsg = `Missing required environment variables: ${missingVars.join(', ')}`;
+      context.log.error(errorMsg);
+      return {
+        status: 500,
+        body: {
+          success: false,
+          error: errorMsg,
+          hint: 'Please configure Gmail API credentials in Azure Application Settings',
+          timestamp: timeStamp
+        }
+      };
+    }
+
+    // Check Firebase initialization
+    if (!db) {
+      const errorMsg = 'Firebase Admin not initialized';
+      context.log.error(errorMsg);
+      return {
+        status: 500,
+        body: {
+          success: false,
+          error: errorMsg,
+          hint: 'Check FIREBASE_ADMIN_PROJECT_ID or GOOGLE_APPLICATION_CREDENTIALS in Azure Application Settings',
+          timestamp: timeStamp
+        }
+      };
+    }
+
+    context.log('Starting email fetch...');
     const result = await fetchNewEmails();
     context.log(`✅ Email fetch complete! Stored: ${result.stored}, Skipped: ${result.skipped}`);
     
@@ -294,12 +336,16 @@ module.exports = async function (req: any, context: any): Promise<any> {
       }
     };
   } catch (error: any) {
-    context.log.error(`❌ Error fetching emails: ${error.message}`);
+    const errorMsg = error.message || 'Unknown error';
+    const errorStack = error.stack || '';
+    context.log.error(`❌ Error fetching emails: ${errorMsg}`);
+    context.log.error(`Stack trace: ${errorStack}`);
+    
     return {
       status: 500,
       body: {
         success: false,
-        error: error.message,
+        error: errorMsg,
         timestamp: timeStamp
       }
     };
