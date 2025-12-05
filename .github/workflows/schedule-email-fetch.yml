@@ -24,7 +24,9 @@ jobs:
       - name: Run email fetch script
         env:
           # Service Account (recommended - set GOOGLE_SERVICE_ACCOUNT_KEY as JSON string)
+          # This same key is used for both Gmail API and Firebase Admin
           GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
           # OAuth2 (alternative - if Service Account not available)
           GMAIL_USER_EMAIL: ${{ secrets.GMAIL_USER_EMAIL }}
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}

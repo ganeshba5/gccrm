@@ -19,18 +19,33 @@ try {
   if (getApps().length === 0) {
     let serviceAccount = null;
     
-    // Try to load service account key
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    // Option 1: Service account key as JSON string in environment variable (for GitHub Actions)
+    const serviceAccountKeyEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (serviceAccountKeyEnv && serviceAccountKeyEnv.trim().length > 0) {
+      try {
+        serviceAccount = JSON.parse(serviceAccountKeyEnv.trim());
+        console.log('Firebase Admin: Using service account from environment variable');
+      } catch (parseError: any) {
+        console.warn('Firebase Admin: Failed to parse service account key from environment variable:', parseError.message);
+      }
+    }
+    
+    // Option 2: Service account key from file path
+    if (!serviceAccount && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       // Use path from environment variable
       const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
       if (existsSync(keyPath)) {
         serviceAccount = JSON.parse(readFileSync(keyPath, 'utf8'));
+        console.log('Firebase Admin: Using service account from file path');
       }
-    } else {
-      // Try default location
+    }
+    
+    // Option 3: Try default location
+    if (!serviceAccount) {
       const defaultPath = join(process.cwd(), 'scripts', 'serviceAccountKey.json');
       if (existsSync(defaultPath)) {
         serviceAccount = JSON.parse(readFileSync(defaultPath, 'utf8'));
+        console.log('Firebase Admin: Using service account from default location');
       }
     }
     
