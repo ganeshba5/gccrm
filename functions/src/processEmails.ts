@@ -164,7 +164,10 @@ function calculateSimilarity(text1: string, text2: string): number {
  * Extracts all content following Account: and Opportunity:, trimming left spaces
  */
 function parseRoutingPattern(content: string): { accountName?: string; opportunityName?: string } | null {
-  if (!content) return null;
+  if (!content) {
+    functions.logger.info('🔍 parseRoutingPattern: No content provided');
+    return null;
+  }
   
   let accountName: string | undefined;
   let opportunityName: string | undefined;
@@ -174,6 +177,9 @@ function parseRoutingPattern(content: string): { accountName?: string; opportuni
   const accountMatch = content.match(accountPattern);
   if (accountMatch && accountMatch[1]) {
     accountName = accountMatch[1].trim();
+    functions.logger.info(`🔍 parseRoutingPattern: Found Account pattern - raw: "${accountMatch[1]}", trimmed: "${accountName}"`);
+  } else {
+    functions.logger.info('🔍 parseRoutingPattern: Account pattern not found');
   }
   
   // Look for Opportunity: pattern - capture everything after "Opportunity:" until newline or end
@@ -181,16 +187,21 @@ function parseRoutingPattern(content: string): { accountName?: string; opportuni
   const opportunityMatch = content.match(opportunityPattern);
   if (opportunityMatch && opportunityMatch[1]) {
     opportunityName = opportunityMatch[1].trim();
+    functions.logger.info(`🔍 parseRoutingPattern: Found Opportunity pattern - raw: "${opportunityMatch[1]}", trimmed: "${opportunityName}"`);
+  } else {
+    functions.logger.info('🔍 parseRoutingPattern: Opportunity pattern not found');
   }
   
   // Return result if at least account name was found
   if (accountName) {
+    functions.logger.info(`🔍 parseRoutingPattern: Returning - accountName: "${accountName}", opportunityName: "${opportunityName || 'NOT FOUND'}"`);
     return {
       accountName,
       opportunityName,
     };
   }
   
+  functions.logger.info('🔍 parseRoutingPattern: No account name found, returning null');
   return null;
 }
 
@@ -216,6 +227,7 @@ async function findOrCreateAccount(accountName: string, createdBy: string): Prom
       name: accountName.trim(),
       status: 'active',
       createdBy,
+      source: 'email', // Mark as created from email processing
       createdAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };
@@ -258,6 +270,7 @@ async function findOrCreateOpportunity(
       stage: 'New',
       owner: createdBy,
       createdBy,
+      source: 'email', // Mark as created from email processing
       createdAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };
@@ -382,6 +395,13 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       return false;
     }
     
+    // Debug: Show content being parsed (first 500 chars)
+    functions.logger.info(`📄 Email content (first 500 chars) for pattern matching:`, {
+      subject: email.subject,
+      contentPreview: content.substring(0, 500),
+      contentLength: content.length,
+    });
+    
     // Check if content already processed in thread
     if (await isContentAlreadyProcessed(content, email.threadId)) {
       functions.logger.info(`⏭️  Skipping email - content already processed in thread: ${email.subject}`);
@@ -394,14 +414,27 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     let opportunityId: string | undefined;
     
     const routing = parseRoutingPattern(content);
+    functions.logger.info(`🔍 Pattern matching results for email "${email.subject}":`, {
+      accountName: routing?.accountName || 'NOT FOUND',
+      opportunityName: routing?.opportunityName || 'NOT FOUND',
+      hasRouting: !!routing,
+    });
+    
     if (routing?.accountName) {
+      functions.logger.info(`📝 Creating/finding Account with name: "${routing.accountName}"`);
       accountId = await findOrCreateAccount(routing.accountName, createdBy);
+      functions.logger.info(`✅ Account ID: ${accountId}`);
+      
       if (routing.opportunityName) {
+        functions.logger.info(`📝 Creating/finding Opportunity with name: "${routing.opportunityName}" for Account: ${accountId}`);
         opportunityId = await findOrCreateOpportunity(routing.opportunityName, accountId, createdBy);
+        functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
       } else {
         // Create default opportunity if not specified
         const opportunityName = `Email Opportunity - ${email.subject?.substring(0, 50) || 'New'}`;
+        functions.logger.info(`📝 Creating default Opportunity with name: "${opportunityName}" for Account: ${accountId}`);
         opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy);
+        functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
       }
     }
     
@@ -427,6 +460,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       opportunityId,
       accountId,
       createdBy,
+      source: 'email', // Mark as created from email processing
       createdAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };

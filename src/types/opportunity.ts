@@ -13,6 +13,7 @@ export type Opportunity = {
   owner: string;                     // User UID who owns the opportunity
   sharedUsers?: SharedUser[];        // List of users with shared access
   createdBy: string;                // User UID who created the opportunity
+  source?: string;                   // Source of creation (e.g., 'email', 'import', 'manual')
   createdAt: Date;
   updatedAt: Date;
 };

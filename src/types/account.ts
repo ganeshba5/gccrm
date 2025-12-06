@@ -31,6 +31,7 @@ export interface Account {
   assignedTo?: string;                // User UID of assigned sales rep
   sharedUsers?: SharedUser[];         // List of users with shared access
   createdBy: string;                 // User UID who created the account
+  source?: string;                    // Source of creation (e.g., 'email', 'import', 'manual')
   createdAt: Date;
   updatedAt: Date;
   lastContact?: Date;

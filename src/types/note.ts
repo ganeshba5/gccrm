@@ -8,6 +8,7 @@ export interface Note {
   opportunityId?: string;             // Optional: Associated with Opportunity
   isPrivate?: boolean;                 // Private notes (only visible to creator)
   createdBy: string;                  // User UID who created the note
+  source?: string;                     // Source of creation (e.g., 'email', 'import', 'manual')
   createdAt: Date;
   updatedAt: Date;
 }
