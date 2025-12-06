@@ -285,6 +285,24 @@ service cloud.firestore {
       allow delete: if true; // Application validates permissions (admin only)
     }
     
+    // Config Settings collection
+    // Note: Application-level authentication - security handled in app code
+    match /configSettings/{settingId} {
+      allow read: if true; // Application validates access
+      allow create: if
+        request.resource.data.key is string &&
+        request.resource.data.scope is string &&
+        request.resource.data.valueType is string &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      allow update: if
+        request.resource.data.key == resource.data.key &&
+        request.resource.data.scope == resource.data.scope &&
+        request.resource.data.valueType == resource.data.valueType &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if true; // Application validates permissions
+    }
+    
     // Legacy collections (for backward compatibility during migration)
     match /leads/{leadId} {
       allow read: if isAuthenticated();
