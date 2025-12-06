@@ -74,4 +74,20 @@ exports.addRole = functions.https.onCall(async (data, context) => {
 // Export fetchEmails function
 const fetchEmails_1 = require("./fetchEmails");
 exports.fetchEmails = fetchEmails_1.fetchEmails;
+// Export processEmails function
+const processEmails_1 = require("./processEmails");
+exports.processEmails = functions.https.onRequest(async (req, res) => {
+    try {
+        const result = await (0, processEmails_1.processUnprocessedEmails)();
+        res.json(Object.assign(Object.assign({ success: true }, result), { timestamp: new Date().toISOString() }));
+    }
+    catch (error) {
+        functions.logger.error('Error processing emails:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString(),
+        });
+    }
+});
 //# sourceMappingURL=index.js.map

@@ -24,6 +24,7 @@ export interface InboundEmail {
     contactId?: string;                 // Linked contact ID
     opportunityId?: string;              // Linked opportunity ID
     noteId?: string;                     // Linked note ID (if converted to note)
+    parentType?: 'opportunity' | 'account' | 'contact';  // Parent entity type this email is attached to
   };
   labels?: string[];                    // Gmail labels
   snippet?: string;                     // Email snippet/preview

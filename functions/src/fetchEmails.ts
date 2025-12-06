@@ -18,6 +18,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { google } from 'googleapis';
+import { processEmail } from './processEmails';
 
 // Firebase Admin is already initialized in index.ts
 const db = admin.firestore();
@@ -258,6 +259,12 @@ async function storeEmail(
     const subject = getHeaderValue(headers, 'Subject') || '';
     const dateHeader = getHeaderValue(headers, 'Date');
 
+    // Skip emails with "testing" in subject
+    if (subject.toLowerCase().includes('testing')) {
+      functions.logger.info(`⏭️  Skipping email with "testing" in subject: ${subject}`);
+      return; // Don't store the email
+    }
+
     // Parse sender
     const fromMatch = fromHeader.match(/(.+?)\s*<(.+)>/);
     const from = {
@@ -348,6 +355,32 @@ async function fetchNewEmails(gmailUserEmail?: string): Promise<{ stored: number
 
         await storeEmail(gmailMessage, body, attachments);
         stored++;
+        
+        // Process the email immediately after storing
+        try {
+          // Get admin user ID for processing
+          const usersRef = db.collection('users');
+          const adminQuery = await usersRef
+            .where('role', '==', 'admin')
+            .where('isActive', '==', true)
+            .limit(1)
+            .get();
+          
+          const adminUserId = adminQuery.empty ? 'system' : adminQuery.docs[0].id;
+          
+          // Find the email document we just created
+          const emailQuery = await db.collection('inboundEmails')
+            .where('messageId', '==', gmailMessage.id)
+            .limit(1)
+            .get();
+          
+          if (!emailQuery.empty) {
+            await processEmail(emailQuery.docs[0], adminUserId);
+          }
+        } catch (processError: any) {
+          functions.logger.warn(`Could not process email ${gmailMessage.id}:`, processError.message);
+          // Don't fail the whole operation if processing fails
+        }
       } catch (error: any) {
         functions.logger.error(`Error processing message ${message.id}:`, error.message);
       }

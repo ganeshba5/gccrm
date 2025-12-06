@@ -53,6 +53,7 @@ exports.fetchEmails = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const googleapis_1 = require("googleapis");
+const processEmails_1 = require("./processEmails");
 // Firebase Admin is already initialized in index.ts
 const db = admin.firestore();
 /**
@@ -215,6 +216,11 @@ async function storeEmail(gmailMessage, body, attachments) {
         const bccHeader = getHeaderValue(headers, 'Bcc');
         const subject = getHeaderValue(headers, 'Subject') || '';
         const dateHeader = getHeaderValue(headers, 'Date');
+        // Skip emails with "testing" in subject
+        if (subject.toLowerCase().includes('testing')) {
+            functions.logger.info(`⏭️  Skipping email with "testing" in subject: ${subject}`);
+            return; // Don't store the email
+        }
         // Parse sender
         const fromMatch = fromHeader.match(/(.+?)\s*<(.+)>/);
         const from = {
@@ -296,6 +302,29 @@ async function fetchNewEmails(gmailUserEmail) {
                 const attachments = extractAttachments(gmailMessage.id, gmailMessage.payload);
                 await storeEmail(gmailMessage, body, attachments);
                 stored++;
+                // Process the email immediately after storing
+                try {
+                    // Get admin user ID for processing
+                    const usersRef = db.collection('users');
+                    const adminQuery = await usersRef
+                        .where('role', '==', 'admin')
+                        .where('isActive', '==', true)
+                        .limit(1)
+                        .get();
+                    const adminUserId = adminQuery.empty ? 'system' : adminQuery.docs[0].id;
+                    // Find the email document we just created
+                    const emailQuery = await db.collection('inboundEmails')
+                        .where('messageId', '==', gmailMessage.id)
+                        .limit(1)
+                        .get();
+                    if (!emailQuery.empty) {
+                        await (0, processEmails_1.processEmail)(emailQuery.docs[0], adminUserId);
+                    }
+                }
+                catch (processError) {
+                    functions.logger.warn(`Could not process email ${gmailMessage.id}:`, processError.message);
+                    // Don't fail the whole operation if processing fails
+                }
             }
             catch (error) {
                 functions.logger.error(`Error processing message ${message.id}:`, error.message);

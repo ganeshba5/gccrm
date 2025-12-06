@@ -60,3 +60,23 @@ exports.addRole = functions.https.onCall(async (data: any, context: any) => {
 // Export fetchEmails function
 import { fetchEmails } from './fetchEmails';
 exports.fetchEmails = fetchEmails;
+
+// Export processEmails function
+import { processUnprocessedEmails } from './processEmails';
+exports.processEmails = functions.https.onRequest(async (req, res) => {
+  try {
+    const result = await processUnprocessedEmails();
+    res.json({
+      success: true,
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    functions.logger.error('Error processing emails:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
