@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Account } from '../types/account';
+import type { Opportunity } from '../types/opportunity';
 import { accountService } from '../services/accountService';
-// opportunityService removed - not used in this component
+import { opportunityService } from '../services/opportunityService';
+import { configSettingService } from '../services/configSettingService';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
 
@@ -15,10 +17,76 @@ export function AccountList() {
   const [accountEditPermissions, setAccountEditPermissions] = useState<Map<string, boolean>>(new Map());
   const [accountSearch, setAccountSearch] = useState<string>('');
   const [accountFocused, setAccountFocused] = useState<boolean>(false);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [viewHistoryFrom, setViewHistoryFrom] = useState<Date | null>(null);
 
   useEffect(() => {
     loadAccounts();
+    loadOpportunities();
+    loadViewHistoryFrom();
   }, []);
+
+  // Load opportunities to count visible ones per account
+  const loadOpportunities = async () => {
+    try {
+      const opps = await opportunityService.getAll();
+      setOpportunities(opps);
+    } catch (err) {
+      console.error('Error loading opportunities:', err);
+    }
+  };
+
+  // Load view_history_from config setting
+  const loadViewHistoryFrom = async () => {
+    try {
+      const setting = await configSettingService.getConfigValue<string | number>('opportunities.view_history_from');
+      if (setting !== null) {
+        let cutoffDate: Date;
+        if (typeof setting === 'number') {
+          // If it's a year, set to January 1st of that year
+          cutoffDate = new Date(setting, 0, 1);
+        } else {
+          // If it's a string, try to parse it as a date
+          cutoffDate = new Date(setting);
+          if (isNaN(cutoffDate.getTime())) {
+            // If parsing fails, try as year
+            const year = parseInt(setting, 10);
+            if (!isNaN(year)) {
+              cutoffDate = new Date(year, 0, 1);
+            } else {
+              console.warn('Invalid view_history_from setting:', setting);
+              return;
+            }
+          }
+        }
+        setViewHistoryFrom(cutoffDate);
+      }
+    } catch (error) {
+      console.error('Error loading view_history_from setting:', error);
+    }
+  };
+
+  // Get count of visible opportunities for an account
+  const getVisibleOpportunityCount = (accountId: string): number => {
+    return opportunities.filter(opp => {
+      // Only count opportunities linked to this account
+      if (opp.accountId !== accountId) return false;
+      
+      // Apply view_history_from filter
+      if (viewHistoryFrom && opp.expectedCloseDate) {
+        const oppDate = new Date(opp.expectedCloseDate);
+        oppDate.setHours(0, 0, 0, 0);
+        const cutoffDate = new Date(viewHistoryFrom);
+        cutoffDate.setHours(0, 0, 0, 0);
+        
+        if (oppDate < cutoffDate) {
+          return false; // Exclude opportunities older than view_history_from
+        }
+      }
+      
+      return true;
+    }).length;
+  };
 
   const loadAccounts = async () => {
     try {
@@ -52,9 +120,19 @@ export function AccountList() {
     }
   };
 
-  const filteredAccounts = accounts.filter((account) =>
-    account.name.toLowerCase().includes(accountSearch.toLowerCase())
-  );
+  const filteredAccounts = accounts.filter((account) => {
+    // First apply search filter
+    const matchesSearch = account.name.toLowerCase().includes(accountSearch.toLowerCase());
+    
+    // If there's an explicit search, show the account even if it has 0 opportunities
+    if (accountSearch.trim() !== '') {
+      return matchesSearch;
+    }
+    
+    // If no search, only show accounts with at least 1 visible opportunity
+    const visibleOppCount = getVisibleOpportunityCount(account.id);
+    return matchesSearch && visibleOppCount > 0;
+  });
 
   if (loading) {
     return <div className="p-4">Loading accounts...</div>;

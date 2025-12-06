@@ -6,6 +6,7 @@ import type { Task } from '../types/task';
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
 import { taskService } from '../services/taskService';
+import { configSettingService } from '../services/configSettingService';
 import type { Account } from '../types/account';
 import NestedDateFilter from './NestedDateFilter';
 import ViewTaskModal from './ViewTaskModal';
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [viewHistoryFrom, setViewHistoryFrom] = useState<Date | null>(null);
   const navigate = useNavigate();
   
   // Date filter state with localStorage persistence
@@ -53,7 +55,38 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+    loadViewHistoryFrom();
   }, []);
+
+  // Load view_history_from config setting
+  const loadViewHistoryFrom = async () => {
+    try {
+      const setting = await configSettingService.getConfigValue<string | number>('opportunities.view_history_from');
+      if (setting !== null) {
+        let cutoffDate: Date;
+        if (typeof setting === 'number') {
+          // If it's a year, set to January 1st of that year
+          cutoffDate = new Date(setting, 0, 1);
+        } else {
+          // If it's a string, try to parse it as a date
+          cutoffDate = new Date(setting);
+          if (isNaN(cutoffDate.getTime())) {
+            // If parsing fails, try as year
+            const year = parseInt(setting, 10);
+            if (!isNaN(year)) {
+              cutoffDate = new Date(year, 0, 1);
+            } else {
+              console.warn('Invalid view_history_from setting:', setting);
+              return;
+            }
+          }
+        }
+        setViewHistoryFrom(cutoffDate);
+      }
+    } catch (error) {
+      console.error('Error loading view_history_from setting:', error);
+    }
+  };
 
   // Save filter settings to localStorage whenever they change
   useEffect(() => {
@@ -194,12 +227,26 @@ export default function Dashboard() {
 
   // Filter opportunities based on date filter
   const filteredOpportunities = opportunities.filter(opp => {
+    // OVERRIDING FILTER: View History From setting
+    // This must be applied FIRST, before any other date filters
+    if (viewHistoryFrom && opp.expectedCloseDate) {
+      const oppDate = new Date(opp.expectedCloseDate);
+      oppDate.setHours(0, 0, 0, 0);
+      const cutoffDate = new Date(viewHistoryFrom);
+      cutoffDate.setHours(0, 0, 0, 0);
+      
+      if (oppDate < cutoffDate) {
+        return false; // Exclude opportunities older than view_history_from
+      }
+    }
+    
     // Date filter (filter by expectedCloseDate within selected range)
     if (dateFilterType !== 'all') {
       const { start, end } = getDateRange();
       
       if (start && end) {
-        // For custom date range, respect the user's explicit range selection (including past dates)
+        // For custom date range, respect the user's explicit range selection
+        // BUT still respect view_history_from override (already applied above)
         if (dateFilterType === 'custom') {
           // Only filter if opportunity has an expectedCloseDate
           if (!opp.expectedCloseDate) return false; // Exclude opportunities without close date from date range filter
