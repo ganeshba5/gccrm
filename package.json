@@ -21,7 +21,9 @@
     "fetch:emails": "tsx scripts/fetch-gmail-emails.ts",
     "test:fetch-emails": "tsx scripts/test-fetch-emails-function.ts",
     "test:process-emails": "tsx scripts/test-process-emails.ts",
-    "query:email-items": "tsx scripts/query-email-created-items.ts"
+    "query:email-items": "tsx scripts/query-email-created-items.ts",
+    "delete:notes": "tsx scripts/delete-notes.ts",
+    "query:firestore": "tsx scripts/firestore-query.ts"
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.11.1",

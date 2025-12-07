@@ -100,6 +100,7 @@ async function getEmailParseSettings() {
 }
 /**
  * Clean subject line by removing tokens like Re:, Fwd:, etc.
+ * Case-insensitive matching - "Fw:" will match "FW:" token, "Re:" will match "RE:" token
  */
 function cleanSubjectLine(subject, tokens) {
     if (!subject)
@@ -109,10 +110,19 @@ function cleanSubjectLine(subject, tokens) {
     // Remove tokens from the beginning (case-insensitive)
     for (const token of tokens) {
         const tokenLower = token.toLowerCase().trim();
+        // Check if subject starts with this token (case-insensitive)
         if (subjectLower.startsWith(tokenLower)) {
-            cleaned = cleaned.substring(tokenLower.length).trim();
-            // Recursively check for multiple tokens (e.g., "Re: Re: Fwd: ...")
-            return cleanSubjectLine(cleaned, tokens);
+            // Find the actual position and length of the token in the original subject
+            // This handles cases like "Fw:" matching "FW:" token
+            const matchIndex = subjectLower.indexOf(tokenLower);
+            if (matchIndex === 0) {
+                // Remove the token from the beginning
+                // Use the actual token length from the original subject by finding where it ends
+                // Since we know it starts at position 0, we can use tokenLower.length
+                cleaned = cleaned.substring(tokenLower.length).trim();
+                // Recursively check for multiple tokens (e.g., "Re: Re: Fwd: ...")
+                return cleanSubjectLine(cleaned, tokens);
+            }
         }
     }
     return cleaned;
@@ -685,12 +695,14 @@ function extractStructuredData(content, subject) {
             }
         }
     }
-    // Extract email addresses
+    // Extract email addresses (keep original case for filtering)
     const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
     const emailMatches = searchText.matchAll(emailPattern);
     for (const match of emailMatches) {
-        const email = match[0].toLowerCase();
-        if (!result.contacts.emails.includes(email)) {
+        const email = match[0]; // Keep original case
+        const emailLower = email.toLowerCase();
+        // Check for duplicates case-insensitively
+        if (!result.contacts.emails.some(e => e.toLowerCase() === emailLower)) {
             result.contacts.emails.push(email);
         }
     }
@@ -869,6 +881,29 @@ async function processEmail(emailDoc, createdBy) {
         }
         // Extract structured data (use cleaned subject)
         const extractedData = extractStructuredData(content, cleanedSubject);
+        // Filter out internal email addresses from extracted contacts
+        const internalEmailsLower = parseSettings.emailAddresses.map(e => e.toLowerCase());
+        const internalDomainsLower = parseSettings.domains.map(d => d.toLowerCase());
+        const originalEmailCount = extractedData.contacts.emails.length;
+        const filteredEmails = extractedData.contacts.emails.filter(email => {
+            const emailLower = email.toLowerCase();
+            const emailDomain = emailLower.split('@')[1];
+            // Filter out if email is in internal email list (case-insensitive)
+            if (internalEmailsLower.includes(emailLower)) {
+                return false;
+            }
+            // Filter out if email domain is in internal domains list (case-insensitive)
+            if (emailDomain && internalDomainsLower.includes(emailDomain)) {
+                return false;
+            }
+            return true;
+        });
+        // Update extractedData with filtered emails
+        extractedData.contacts.emails = filteredEmails;
+        const filteredCount = originalEmailCount - filteredEmails.length;
+        if (filteredCount > 0) {
+            functions.logger.info(`🔍 Filtered out ${filteredCount} internal email address(es) from extracted contacts`);
+        }
         functions.logger.info(`📊 Extracted structured data:`, {
             dates: extractedData.dates.length,
             amounts: extractedData.amounts.length,
@@ -878,6 +913,7 @@ async function processEmail(emailDoc, createdBy) {
                 phones: extractedData.contacts.phones.length,
                 names: extractedData.contacts.names.length,
             },
+            filteredInternalEmails: filteredCount,
         });
         // Analyze email (use cleaned subject)
         const analysis = analyzeEmail(content, cleanedSubject);
