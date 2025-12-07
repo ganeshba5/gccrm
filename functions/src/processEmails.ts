@@ -539,11 +539,13 @@ async function findOrCreateOpportunity(
 async function extractEntitiesFromContext(
   email: any,
   content: string,
-  createdBy: string
+  createdBy: string,
+  cleanedSubject?: string,
+  parseSettings?: { subjectTokens: string[] }
 ): Promise<{ accountId?: string; opportunityId?: string } | null> {
   try {
     const fromEmail = email.from?.email || '';
-    const subject = email.subject || '';
+    const subject = cleanedSubject || email.subject || '';
     const domain = fromEmail.split('@')[1];
     
     if (!domain) return null;
@@ -565,9 +567,9 @@ async function extractEntitiesFromContext(
       }
     }
     
-    // If no company name found, try to derive from domain
+    // If no company name found, try to derive from cleaned subject
     if (!companyName) {
-      companyName = extractCompanyName(subject, domain);
+      companyName = extractCompanyName(subject, domain, parseSettings);
     }
     
     // Try to find existing account using fuzzy matching
@@ -623,11 +625,13 @@ async function extractEntitiesFromContext(
  */
 async function extractFromMetadata(
   email: any,
-  createdBy: string
+  createdBy: string,
+  cleanedSubject?: string,
+  parseSettings?: { subjectTokens: string[] }
 ): Promise<{ accountId?: string; opportunityId?: string } | null> {
   try {
     const fromEmail = email.from?.email || '';
-    const subject = email.subject || '';
+    const subject = cleanedSubject || email.subject || '';
     const domain = fromEmail.split('@')[1];
     
     if (!domain) return null;
@@ -654,11 +658,11 @@ async function extractFromMetadata(
     }
     
     if (accountQuery.empty) {
-      // Try to extract company name from subject or create from domain
-      const companyName = extractCompanyName(subject, domain);
+      // Try to extract company name from cleaned subject or create from domain
+      const companyName = extractCompanyName(subject, domain, parseSettings);
       const accountId = await findOrCreateAccount(companyName, createdBy, 'metadata', 0.6);
       
-      // Create a default opportunity
+      // Create a default opportunity (use cleaned subject)
       const opportunityName = `Email Opportunity - ${subject.substring(0, 50)}`;
       const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'metadata', 0.6);
       
@@ -667,7 +671,7 @@ async function extractFromMetadata(
     
     const accountId = accountQuery.docs[0].id;
     
-    // Try to find or create opportunity for this account
+    // Try to find or create opportunity for this account (use cleaned subject)
     const opportunityName = `Email Opportunity - ${subject.substring(0, 50)}`;
     const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'metadata', 0.6);
     
@@ -681,11 +685,32 @@ async function extractFromMetadata(
 /**
  * Extract company name from subject or use domain
  */
-function extractCompanyName(subject: string, domain: string): string {
-  // Try to extract company name from subject
-  const subjectMatch = subject.match(/\[(.+?)\]/) || subject.match(/^(.+?):/);
-  if (subjectMatch && subjectMatch[1]) {
-    return subjectMatch[1].trim();
+function extractCompanyName(subject: string, domain: string, parseSettings?: { subjectTokens: string[] }): string {
+  // Clean subject first to remove tokens like "Fw:", "Re:", etc.
+  let cleanedSubject = subject;
+  if (parseSettings && parseSettings.subjectTokens.length > 0) {
+    cleanedSubject = cleanSubjectLine(subject, parseSettings.subjectTokens);
+  }
+  
+  // Try to extract company name from cleaned subject
+  // First try bracket notation: [Company Name]
+  const bracketMatch = cleanedSubject.match(/\[(.+?)\]/);
+  if (bracketMatch && bracketMatch[1]) {
+    const name = bracketMatch[1].trim();
+    // Don't use if it's a token (too short or matches token pattern)
+    if (name.length > 2) {
+      return name;
+    }
+  }
+  
+  // Try pattern like "Company: Name" but avoid single-word tokens
+  const colonMatch = cleanedSubject.match(/^([A-Z][a-zA-Z\s&]{2,}?):/);
+  if (colonMatch && colonMatch[1]) {
+    const name = colonMatch[1].trim();
+    // Ensure it's not just a token (should be at least 3 chars and not match common tokens)
+    if (name.length >= 3) {
+      return name;
+    }
   }
   
   // Use domain name as fallback
@@ -1129,7 +1154,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       if (allowedMethods.includes('metadata')) {
         routingMethod = 'metadata';
         routingConfidence = 0.6;
-        const metadataResult = await extractFromMetadata(email, createdBy);
+        const metadataResult = await extractFromMetadata(email, createdBy, cleanedSubject, parseSettings);
         if (metadataResult) {
           accountId = metadataResult.accountId;
           opportunityId = metadataResult.opportunityId;
@@ -1154,7 +1179,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       if (allowedMethods.includes('context')) {
         routingMethod = 'context';
         routingConfidence = 0.4;
-        const contextResult = await extractEntitiesFromContext(email, content, createdBy);
+        const contextResult = await extractEntitiesFromContext(email, content, createdBy, cleanedSubject, parseSettings);
         if (contextResult) {
           accountId = contextResult.accountId;
           opportunityId = contextResult.opportunityId;

@@ -480,11 +480,11 @@ async function findOrCreateOpportunity(opportunityName, accountId, createdBy, ro
  * Extract entities from email context (rule-based, no external APIs)
  * Uses heuristics to find account/opportunity names from email content, signatures, domains
  */
-async function extractEntitiesFromContext(email, content, createdBy) {
+async function extractEntitiesFromContext(email, content, createdBy, cleanedSubject, parseSettings) {
     var _a;
     try {
         const fromEmail = ((_a = email.from) === null || _a === void 0 ? void 0 : _a.email) || '';
-        const subject = email.subject || '';
+        const subject = cleanedSubject || email.subject || '';
         const domain = fromEmail.split('@')[1];
         if (!domain)
             return null;
@@ -503,9 +503,9 @@ async function extractEntitiesFromContext(email, content, createdBy) {
                 break;
             }
         }
-        // If no company name found, try to derive from domain
+        // If no company name found, try to derive from cleaned subject
         if (!companyName) {
-            companyName = extractCompanyName(subject, domain);
+            companyName = extractCompanyName(subject, domain, parseSettings);
         }
         // Try to find existing account using fuzzy matching
         const accountsRef = db.collection('accounts');
@@ -552,11 +552,11 @@ async function extractEntitiesFromContext(email, content, createdBy) {
  * Extract account/opportunity from email metadata (sender email domain, subject, etc.)
  * Enhanced version with improved matching
  */
-async function extractFromMetadata(email, createdBy) {
+async function extractFromMetadata(email, createdBy, cleanedSubject, parseSettings) {
     var _a;
     try {
         const fromEmail = ((_a = email.from) === null || _a === void 0 ? void 0 : _a.email) || '';
-        const subject = email.subject || '';
+        const subject = cleanedSubject || email.subject || '';
         const domain = fromEmail.split('@')[1];
         if (!domain)
             return null;
@@ -579,16 +579,16 @@ async function extractFromMetadata(email, createdBy) {
             }
         }
         if (accountQuery.empty) {
-            // Try to extract company name from subject or create from domain
-            const companyName = extractCompanyName(subject, domain);
+            // Try to extract company name from cleaned subject or create from domain
+            const companyName = extractCompanyName(subject, domain, parseSettings);
             const accountId = await findOrCreateAccount(companyName, createdBy, 'metadata', 0.6);
-            // Create a default opportunity
+            // Create a default opportunity (use cleaned subject)
             const opportunityName = `Email Opportunity - ${subject.substring(0, 50)}`;
             const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'metadata', 0.6);
             return { accountId, opportunityId };
         }
         const accountId = accountQuery.docs[0].id;
-        // Try to find or create opportunity for this account
+        // Try to find or create opportunity for this account (use cleaned subject)
         const opportunityName = `Email Opportunity - ${subject.substring(0, 50)}`;
         const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'metadata', 0.6);
         return { accountId, opportunityId };
@@ -601,11 +601,30 @@ async function extractFromMetadata(email, createdBy) {
 /**
  * Extract company name from subject or use domain
  */
-function extractCompanyName(subject, domain) {
-    // Try to extract company name from subject
-    const subjectMatch = subject.match(/\[(.+?)\]/) || subject.match(/^(.+?):/);
-    if (subjectMatch && subjectMatch[1]) {
-        return subjectMatch[1].trim();
+function extractCompanyName(subject, domain, parseSettings) {
+    // Clean subject first to remove tokens like "Fw:", "Re:", etc.
+    let cleanedSubject = subject;
+    if (parseSettings && parseSettings.subjectTokens.length > 0) {
+        cleanedSubject = cleanSubjectLine(subject, parseSettings.subjectTokens);
+    }
+    // Try to extract company name from cleaned subject
+    // First try bracket notation: [Company Name]
+    const bracketMatch = cleanedSubject.match(/\[(.+?)\]/);
+    if (bracketMatch && bracketMatch[1]) {
+        const name = bracketMatch[1].trim();
+        // Don't use if it's a token (too short or matches token pattern)
+        if (name.length > 2) {
+            return name;
+        }
+    }
+    // Try pattern like "Company: Name" but avoid single-word tokens
+    const colonMatch = cleanedSubject.match(/^([A-Z][a-zA-Z\s&]{2,}?):/);
+    if (colonMatch && colonMatch[1]) {
+        const name = colonMatch[1].trim();
+        // Ensure it's not just a token (should be at least 3 chars and not match common tokens)
+        if (name.length >= 3) {
+            return name;
+        }
     }
     // Use domain name as fallback
     return domain.split('.')[0]
@@ -976,7 +995,7 @@ async function processEmail(emailDoc, createdBy) {
             if (allowedMethods.includes('metadata')) {
                 routingMethod = 'metadata';
                 routingConfidence = 0.6;
-                const metadataResult = await extractFromMetadata(email, createdBy);
+                const metadataResult = await extractFromMetadata(email, createdBy, cleanedSubject, parseSettings);
                 if (metadataResult) {
                     accountId = metadataResult.accountId;
                     opportunityId = metadataResult.opportunityId;
@@ -1001,7 +1020,7 @@ async function processEmail(emailDoc, createdBy) {
             if (allowedMethods.includes('context')) {
                 routingMethod = 'context';
                 routingConfidence = 0.4;
-                const contextResult = await extractEntitiesFromContext(email, content, createdBy);
+                const contextResult = await extractEntitiesFromContext(email, content, createdBy, cleanedSubject, parseSettings);
                 if (contextResult) {
                     accountId = contextResult.accountId;
                     opportunityId = contextResult.opportunityId;
