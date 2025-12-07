@@ -20,17 +20,30 @@ const DEFAULT_CONTEXT_MATCH_THRESHOLD = 0.6; // 60% similarity for context-based
  */
 async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
   try {
+    const configKey = `email_parsing.${key}`;
     const configRef = db.collection('configSettings');
     const globalQuery = await configRef
-      .where('key', '==', `email_parsing.${key}`)
+      .where('key', '==', configKey)
       .where('scope', '==', 'global')
       .limit(1)
       .get();
     
+    functions.logger.info(`🔍 getParsingConfig: Looking for key "${configKey}"`, {
+      queryKey: configKey,
+      queryResults: globalQuery.size,
+    });
+    
     if (!globalQuery.empty) {
       const setting = globalQuery.docs[0].data();
+      functions.logger.info(`✅ getParsingConfig: Found setting for "${configKey}"`, {
+        value: setting.value,
+        valueType: typeof setting.value,
+        isArray: Array.isArray(setting.value),
+      });
       return setting.value;
     }
+    
+    functions.logger.warn(`⚠️  getParsingConfig: No setting found for "${configKey}", using fallback`);
     
     // Fall back to predefined defaults for known settings
     const predefinedDefaults: Record<string, any> = {
@@ -44,12 +57,18 @@ async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
     };
     
     if (predefinedDefaults[key] !== undefined) {
+      functions.logger.info(`📋 getParsingConfig: Using predefined default for "${key}"`, {
+        defaultValue: predefinedDefaults[key],
+      });
       return predefinedDefaults[key];
     }
     
+    functions.logger.info(`📋 getParsingConfig: Using provided default for "${key}"`, {
+      defaultValue: defaultValue,
+    });
     return defaultValue;
-  } catch (error) {
-    functions.logger.warn(`Could not load config for ${key}, using default:`, error);
+  } catch (error: any) {
+    functions.logger.warn(`❌ Could not load config for ${key}, using default:`, error.message);
     return defaultValue;
   }
 }
@@ -988,11 +1007,24 @@ async function addAuditMessage(
   try {
     const email = emailDoc.data();
     const existingMessages = (email?.auditMessages || []) as any[];
+    
+    // Filter out undefined values from details to avoid Firestore errors
+    let cleanedDetails: any = undefined;
+    if (details) {
+      cleanedDetails = Object.fromEntries(
+        Object.entries(details).filter(([_, value]) => value !== undefined)
+      );
+      // Only include details if it has at least one property
+      if (Object.keys(cleanedDetails).length === 0) {
+        cleanedDetails = undefined;
+      }
+    }
+    
     const newMessage = {
       timestamp: admin.firestore.Timestamp.now(),
       status,
       message,
-      ...(details && { details }),
+      ...(cleanedDetails && { details: cleanedDetails }),
     };
     
     // Append to existing messages array
@@ -1199,6 +1231,15 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       const applyRoutingMethods = await getParsingConfig('apply_routing_methods', ['pattern']);
       const allowedMethods = Array.isArray(applyRoutingMethods) ? applyRoutingMethods : ['pattern'];
       
+      functions.logger.info(`🔍 Metadata routing check:`, {
+        accountId: accountId || 'undefined',
+        applyRoutingMethods: applyRoutingMethods,
+        allowedMethods: allowedMethods,
+        includesMetadata: allowedMethods.includes('metadata'),
+        methodType: typeof applyRoutingMethods,
+        isArray: Array.isArray(applyRoutingMethods),
+      });
+      
       if (allowedMethods.includes('metadata')) {
         routingMethod = 'metadata';
         routingConfidence = 0.6;
@@ -1245,11 +1286,16 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     
     if (!opportunityId) {
       functions.logger.info(`⏭️  Skipping email - could not determine opportunity (no routing method succeeded): ${email.subject}`);
+      // Only include routingMethod in details if it's defined (not undefined)
+      const details: any = { routingConfidence };
+      if (routingMethod) {
+        details.routingMethod = routingMethod;
+      }
       await addAuditMessage(
         emailDoc, 
         'failure', 
         'Email processing failed: Could not determine opportunity (no routing method succeeded)', 
-        { routingMethod, routingConfidence }
+        details
       );
       // Update email with analysis even if not processed
       await emailDoc.ref.update({
