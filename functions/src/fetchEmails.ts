@@ -259,18 +259,18 @@ async function storeEmail(
     const subject = getHeaderValue(headers, 'Subject') || '';
     const dateHeader = getHeaderValue(headers, 'Date');
 
-    // Skip emails with "testing" in subject
-    if (subject.toLowerCase().includes('testing')) {
-      functions.logger.info(`⏭️  Skipping email with "testing" in subject: ${subject}`);
-      return; // Don't store the email
-    }
-
     // Parse sender
     const fromMatch = fromHeader.match(/(.+?)\s*<(.+)>/);
     const from = {
       email: fromMatch ? fromMatch[2] : fromHeader,
       name: fromMatch ? fromMatch[1].replace(/"/g, '') : undefined,
     };
+
+    // Skip emails with "testing" in subject
+    if (subject.toLowerCase().includes('testing')) {
+      functions.logger.info(`⏭️  Skipping email with "testing" in subject: ${subject}`);
+      return; // Don't store the email
+    }
 
     // Parse date
     const receivedAt = dateHeader ? new Date(dateHeader) : new Date();

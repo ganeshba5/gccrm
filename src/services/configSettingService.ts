@@ -155,6 +155,16 @@ class ConfigSettingService {
         throw new Error('Only admins can create or update global settings');
       }
 
+      // Special check: apply_routing_methods must be global only
+      if (data.key === 'email_parsing.apply_routing_methods' && data.scope !== 'global') {
+        throw new Error('email_parsing.apply_routing_methods can only be set as a global setting');
+      }
+
+      // Special check: parse_settings must be global only
+      if (data.key === 'email_parsing.parse_settings' && data.scope !== 'global') {
+        throw new Error('email_parsing.parse_settings can only be set as a global setting');
+      }
+
       if (data.scope === 'user' && targetUserId !== user.id && !isAdmin) {
         throw new Error('Users can only manage their own user settings');
       }

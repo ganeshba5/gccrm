@@ -16,6 +16,7 @@ const DEFAULT_CONTEXT_MATCH_THRESHOLD = 0.6; // 60% similarity for context-based
 /**
  * Get configuration value for email parsing
  * Falls back to defaults if not set
+ * Only checks global settings (not user settings)
  */
 async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
   try {
@@ -31,11 +32,69 @@ async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
       return setting.value;
     }
     
+    // Fall back to predefined defaults for known settings
+    const predefinedDefaults: Record<string, any> = {
+      'apply_routing_methods': ['pattern'], // Default: only pattern matching
+      'show_routing_methods': [], // Default: empty (only manual items)
+      'parse_settings': {
+        subjectTokens: ['Re:', 'Fwd:', 'FW:', 'RE:', 'FWD:'],
+        domains: ['infoglobaltech.com'],
+        emailAddresses: []
+      },
+    };
+    
+    if (predefinedDefaults[key] !== undefined) {
+      return predefinedDefaults[key];
+    }
+    
     return defaultValue;
   } catch (error) {
     functions.logger.warn(`Could not load config for ${key}, using default:`, error);
     return defaultValue;
   }
+}
+
+/**
+ * Get email parse settings from config
+ */
+async function getEmailParseSettings(): Promise<{
+  subjectTokens: string[];
+  domains: string[];
+  emailAddresses: string[];
+}> {
+  const parseSettings = await getParsingConfig('parse_settings', {
+    subjectTokens: ['Re:', 'Fwd:', 'FW:', 'RE:', 'FWD:'],
+    domains: ['infoglobaltech.com'],
+    emailAddresses: []
+  });
+  
+  return {
+    subjectTokens: Array.isArray(parseSettings?.subjectTokens) ? parseSettings.subjectTokens : [],
+    domains: Array.isArray(parseSettings?.domains) ? parseSettings.domains : [],
+    emailAddresses: Array.isArray(parseSettings?.emailAddresses) ? parseSettings.emailAddresses : [],
+  };
+}
+
+/**
+ * Clean subject line by removing tokens like Re:, Fwd:, etc.
+ */
+function cleanSubjectLine(subject: string, tokens: string[]): string {
+  if (!subject) return '';
+  
+  let cleaned = subject.trim();
+  const subjectLower = cleaned.toLowerCase();
+  
+  // Remove tokens from the beginning (case-insensitive)
+  for (const token of tokens) {
+    const tokenLower = token.toLowerCase().trim();
+    if (subjectLower.startsWith(tokenLower)) {
+      cleaned = cleaned.substring(tokenLower.length).trim();
+      // Recursively check for multiple tokens (e.g., "Re: Re: Fwd: ...")
+      return cleanSubjectLine(cleaned, tokens);
+    }
+  }
+  
+  return cleaned;
 }
 
 interface EmailProcessingResult {
@@ -897,6 +956,28 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       return false;
     }
     
+    // Get email parse settings
+    const parseSettings = await getEmailParseSettings();
+    
+    // Clean subject line by removing tokens (Re:, Fwd:, etc.)
+    let cleanedSubject = email.subject || '';
+    if (cleanedSubject && parseSettings.subjectTokens.length > 0) {
+      cleanedSubject = cleanSubjectLine(cleanedSubject, parseSettings.subjectTokens);
+      functions.logger.info(`📝 Cleaned subject: "${email.subject}" -> "${cleanedSubject}"`);
+    }
+    
+    // Check if email is from internal domain/address (for potential special handling)
+    const fromEmail = email.from?.email || '';
+    const fromDomain = fromEmail.split('@')[1]?.toLowerCase();
+    const isInternalEmail = 
+      (fromDomain && parseSettings.domains.includes(fromDomain)) ||
+      parseSettings.emailAddresses.some(addr => addr.toLowerCase() === fromEmail.toLowerCase());
+    
+    if (isInternalEmail) {
+      functions.logger.info(`📧 Internal email detected: ${fromEmail}`);
+      // Could add special parsing logic for internal emails here if needed
+    }
+    
     // Get email content
     const htmlContent = email.body?.html || '';
     const textContent = email.body?.text || '';
@@ -921,8 +1002,8 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       return false;
     }
     
-    // Extract structured data
-    const extractedData = extractStructuredData(content, email.subject);
+    // Extract structured data (use cleaned subject)
+    const extractedData = extractStructuredData(content, cleanedSubject);
     functions.logger.info(`📊 Extracted structured data:`, {
       dates: extractedData.dates.length,
       amounts: extractedData.amounts.length,
@@ -934,13 +1015,14 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       },
     });
     
-    // Analyze email
-    const analysis = analyzeEmail(content, email.subject);
+    // Analyze email (use cleaned subject)
+    const analysis = analyzeEmail(content, cleanedSubject);
     functions.logger.info(`📈 Email analysis:`, analysis);
     
     // Debug: Show content being parsed (first 500 chars)
     functions.logger.info(`📄 Email content (first 500 chars) for pattern matching:`, {
-      subject: email.subject,
+      originalSubject: email.subject,
+      cleanedSubject: cleanedSubject,
       contentPreview: content.substring(0, 500),
       contentLength: content.length,
     });
@@ -960,8 +1042,9 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     let routingConfidence = 0;
     
     // Step 1: Try explicit pattern matching (highest confidence)
-    const routing = parseRoutingPattern(content, email.subject);
-    functions.logger.info(`🔍 Pattern matching results for email "${email.subject}":`, {
+    // Use cleaned subject for pattern matching
+    const routing = parseRoutingPattern(content, cleanedSubject);
+    functions.logger.info(`🔍 Pattern matching results for email "${cleanedSubject}":`, {
       accountName: routing?.accountName || 'NOT FOUND',
       opportunityName: routing?.opportunityName || 'NOT FOUND',
       hasRouting: !!routing,
@@ -982,8 +1065,8 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
         functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
         await addAuditMessage(emailDoc, 'success', `Opportunity found/created via pattern matching`, { opportunityId, opportunityName: routing.opportunityName });
       } else {
-        // Create default opportunity if not specified
-        const opportunityName = `Email Opportunity - ${email.subject?.substring(0, 50) || 'New'}`;
+        // Create default opportunity if not specified (use cleaned subject)
+        const opportunityName = `Email Opportunity - ${cleanedSubject?.substring(0, 50) || 'New'}`;
         functions.logger.info(`📝 Creating default Opportunity with name: "${opportunityName}" for Account: ${accountId}`);
         opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'pattern', 0.7);
         routingConfidence = 0.7; // Lower confidence when opportunity name not provided
@@ -993,34 +1076,52 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     }
     
     // Step 2: Try metadata-based routing (medium confidence)
+    // Only if metadata routing is enabled in apply_routing_methods setting
     if (!accountId) {
-      routingMethod = 'metadata';
-      routingConfidence = 0.6;
-      const metadataResult = await extractFromMetadata(email, createdBy);
-      if (metadataResult) {
-        accountId = metadataResult.accountId;
-        opportunityId = metadataResult.opportunityId;
-        functions.logger.info(`✅ Metadata-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
-        await addAuditMessage(emailDoc, 'success', `Account and opportunity found/created via metadata routing`, { accountId, opportunityId });
+      const applyRoutingMethods = await getParsingConfig('apply_routing_methods', ['pattern']);
+      const allowedMethods = Array.isArray(applyRoutingMethods) ? applyRoutingMethods : ['pattern'];
+      
+      if (allowedMethods.includes('metadata')) {
+        routingMethod = 'metadata';
+        routingConfidence = 0.6;
+        const metadataResult = await extractFromMetadata(email, createdBy);
+        if (metadataResult) {
+          accountId = metadataResult.accountId;
+          opportunityId = metadataResult.opportunityId;
+          functions.logger.info(`✅ Metadata-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
+          await addAuditMessage(emailDoc, 'success', `Account and opportunity found/created via metadata routing`, { accountId, opportunityId });
+        } else {
+          routingConfidence = 0;
+          await addAuditMessage(emailDoc, 'warning', 'Metadata-based routing attempted but no account/opportunity found');
+        }
       } else {
-        routingConfidence = 0;
-        await addAuditMessage(emailDoc, 'warning', 'Metadata-based routing attempted but no account/opportunity found');
+        functions.logger.info(`⏭️  Metadata-based routing skipped: not enabled in apply_routing_methods setting`);
+        await addAuditMessage(emailDoc, 'info', 'Metadata-based routing skipped: not enabled in apply_routing_methods setting');
       }
     }
     
     // Step 3: Try rule-based entity extraction from context (lower confidence)
+    // Only if context routing is enabled in apply_routing_methods setting
     if (!accountId) {
-      routingMethod = 'context';
-      routingConfidence = 0.4;
-      const contextResult = await extractEntitiesFromContext(email, content, createdBy);
-      if (contextResult) {
-        accountId = contextResult.accountId;
-        opportunityId = contextResult.opportunityId;
-        functions.logger.info(`✅ Context-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
-        await addAuditMessage(emailDoc, 'success', `Account and opportunity found/created via context-based routing`, { accountId, opportunityId });
+      const applyRoutingMethods = await getParsingConfig('apply_routing_methods', ['pattern']);
+      const allowedMethods = Array.isArray(applyRoutingMethods) ? applyRoutingMethods : ['pattern'];
+      
+      if (allowedMethods.includes('context')) {
+        routingMethod = 'context';
+        routingConfidence = 0.4;
+        const contextResult = await extractEntitiesFromContext(email, content, createdBy);
+        if (contextResult) {
+          accountId = contextResult.accountId;
+          opportunityId = contextResult.opportunityId;
+          functions.logger.info(`✅ Context-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
+          await addAuditMessage(emailDoc, 'success', `Account and opportunity found/created via context-based routing`, { accountId, opportunityId });
+        } else {
+          routingConfidence = 0;
+          await addAuditMessage(emailDoc, 'warning', 'Context-based routing attempted but no account/opportunity found');
+        }
       } else {
-        routingConfidence = 0;
-        await addAuditMessage(emailDoc, 'warning', 'Context-based routing attempted but no account/opportunity found');
+        functions.logger.info(`⏭️  Context-based routing skipped: not enabled in apply_routing_methods setting`);
+        await addAuditMessage(emailDoc, 'info', 'Context-based routing skipped: not enabled in apply_routing_methods setting');
       }
     }
     

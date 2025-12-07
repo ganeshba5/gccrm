@@ -218,6 +218,22 @@ export default function SettingsPage() {
           />
         );
       case 'object':
+        // Special handling for email_parsing.parse_settings
+        if (formData.key === 'email_parsing.parse_settings') {
+          return (
+            <textarea
+              value={value as string}
+              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              placeholder={`{
+  "subjectTokens": ["Re:", "Fwd:", "FW:"],
+  "domains": ["infoglobaltech.com"],
+  "emailAddresses": []
+}`}
+            />
+          );
+        }
         return (
           <textarea
             value={value as string}
@@ -353,12 +369,16 @@ export default function SettingsPage() {
               <select
                 value={formData.scope}
                 onChange={(e) => setFormData({ ...formData, scope: e.target.value as ConfigScope })}
-                disabled={!!editingSetting}
+                disabled={!!editingSetting || formData.key === 'email_parsing.apply_routing_methods' || formData.key === 'email_parsing.parse_settings'}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                title={(formData.key === 'email_parsing.apply_routing_methods' || formData.key === 'email_parsing.parse_settings') ? 'This setting can only be global' : ''}
               >
                 <option value="global">Global</option>
                 <option value="user">User</option>
               </select>
+              {(formData.key === 'email_parsing.apply_routing_methods' || formData.key === 'email_parsing.parse_settings') && (
+                <p className="mt-1 text-xs text-gray-500">This setting can only be global</p>
+              )}
             </div>
 
             <div>

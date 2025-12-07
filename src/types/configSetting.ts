@@ -68,6 +68,28 @@ export const PREDEFINED_CONFIG_SETTINGS = {
       options: ['pattern', 'metadata', 'context'] 
     },
   },
+  'email_parsing.apply_routing_methods': {
+    defaultValue: ['pattern'], // Default: only pattern matching creates objects
+    valueType: 'array' as ConfigValueType,
+    description: 'Controls which routing methods are allowed to create accounts/opportunities. Options: pattern, metadata, context. Explicit pattern matching (Account:, Opportunity:) is always allowed. This setting controls metadata and context-based routing. Global setting only.',
+    category: 'email_parsing',
+    isEditable: true,
+    validation: { 
+      type: 'enum', 
+      options: ['pattern', 'metadata', 'context'] 
+    },
+  },
+  'email_parsing.parse_settings': {
+    defaultValue: {
+      subjectTokens: ['Re:', 'Fwd:', 'FW:', 'RE:', 'FWD:'],
+      domains: ['infoglobaltech.com'],
+      emailAddresses: []
+    },
+    valueType: 'object' as ConfigValueType,
+    description: 'Email parsing settings. Used to clean email content during parsing. subjectTokens: array of subject prefixes to strip from subject line (case-insensitive). domains: array of internal email domains (without @). emailAddresses: array of specific internal email addresses. Global setting only.',
+    category: 'email_parsing',
+    isEditable: true,
+  },
   // Add more predefined settings here
 };
 
