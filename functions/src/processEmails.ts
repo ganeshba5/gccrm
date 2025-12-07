@@ -690,6 +690,16 @@ function extractCompanyName(subject: string, domain: string, parseSettings?: { s
   let cleanedSubject = subject;
   if (parseSettings && parseSettings.subjectTokens.length > 0) {
     cleanedSubject = cleanSubjectLine(subject, parseSettings.subjectTokens);
+    functions.logger.info(`🔍 extractCompanyName: Original subject: "${subject}" -> Cleaned: "${cleanedSubject}"`);
+  }
+  
+  // If after cleaning, the subject is empty or too short, use domain
+  if (!cleanedSubject || cleanedSubject.trim().length < 3) {
+    functions.logger.info(`🔍 extractCompanyName: Cleaned subject too short, using domain: ${domain}`);
+    return domain.split('.')[0]
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
   
   // Try to extract company name from cleaned subject
@@ -697,27 +707,55 @@ function extractCompanyName(subject: string, domain: string, parseSettings?: { s
   const bracketMatch = cleanedSubject.match(/\[(.+?)\]/);
   if (bracketMatch && bracketMatch[1]) {
     const name = bracketMatch[1].trim();
-    // Don't use if it's a token (too short or matches token pattern)
-    if (name.length > 2) {
+    // Don't use if it's a token (too short)
+    if (name.length >= 3) {
+      functions.logger.info(`🔍 extractCompanyName: Found company name in brackets: "${name}"`);
       return name;
     }
   }
   
-  // Try pattern like "Company: Name" but avoid single-word tokens
-  const colonMatch = cleanedSubject.match(/^([A-Z][a-zA-Z\s&]{2,}?):/);
+  // Try pattern like "Company: Name" but require at least 4 characters to avoid short tokens
+  // Also check that it doesn't start with common email tokens
+  const colonMatch = cleanedSubject.match(/^([A-Z][a-zA-Z\s&]{3,}?):/);
   if (colonMatch && colonMatch[1]) {
     const name = colonMatch[1].trim();
-    // Ensure it's not just a token (should be at least 3 chars and not match common tokens)
-    if (name.length >= 3) {
+    // Ensure it's not a short token (minimum 4 chars) and doesn't match common email prefixes
+    const commonTokens = ['fw', 'fwd', 're', 'fw:', 'fwd:', 're:'];
+    const nameLower = name.toLowerCase();
+    if (name.length >= 4 && !commonTokens.includes(nameLower)) {
+      functions.logger.info(`🔍 extractCompanyName: Found company name before colon: "${name}"`);
       return name;
+    }
+  }
+  
+  // If subject starts with a capital letter and has meaningful content, try to extract first meaningful words
+  // Skip if it starts with common email patterns
+  const trimmedSubject = cleanedSubject.trim();
+  if (trimmedSubject.length >= 10) {
+    // Try to extract first few words (up to 5 words) as potential company name
+    const words = trimmedSubject.split(/\s+/).slice(0, 5);
+    if (words.length > 0 && words[0].length >= 3) {
+      // Check if first word is not a common token
+      const firstWord = words[0].toLowerCase();
+      const commonStarters = ['opportunity', 'for', 're', 'fw', 'fwd', 'subject', 'regarding'];
+      if (!commonStarters.includes(firstWord)) {
+        // Use first 2-3 words as company name
+        const potentialName = words.slice(0, Math.min(3, words.length)).join(' ');
+        if (potentialName.length >= 4) {
+          functions.logger.info(`🔍 extractCompanyName: Extracted from subject start: "${potentialName}"`);
+          return potentialName;
+        }
+      }
     }
   }
   
   // Use domain name as fallback
-  return domain.split('.')[0]
+  const domainName = domain.split('.')[0]
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+  functions.logger.info(`🔍 extractCompanyName: Using domain as fallback: "${domainName}"`);
+  return domainName;
 }
 
 /**
@@ -1044,21 +1082,29 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     const extractedData = extractStructuredData(content, cleanedSubject);
     
     // Filter out internal email addresses from extracted contacts
-    const internalEmailsLower = parseSettings.emailAddresses.map(e => e.toLowerCase());
-    const internalDomainsLower = parseSettings.domains.map(d => d.toLowerCase());
+    const internalEmailsLower = parseSettings.emailAddresses.map(e => e.toLowerCase().trim());
+    const internalDomainsLower = parseSettings.domains.map(d => d.toLowerCase().trim());
+    
+    functions.logger.info(`🔍 Email filtering settings:`, {
+      internalEmails: internalEmailsLower,
+      internalDomains: internalDomainsLower,
+      totalExtractedEmails: extractedData.contacts.emails.length,
+    });
     
     const originalEmailCount = extractedData.contacts.emails.length;
     const filteredEmails = extractedData.contacts.emails.filter(email => {
-      const emailLower = email.toLowerCase();
-      const emailDomain = emailLower.split('@')[1];
+      const emailLower = email.toLowerCase().trim();
+      const emailDomain = emailLower.split('@')[1]?.toLowerCase();
       
       // Filter out if email is in internal email list (case-insensitive)
       if (internalEmailsLower.includes(emailLower)) {
+        functions.logger.info(`🔍 Filtering out internal email: ${email}`);
         return false;
       }
       
       // Filter out if email domain is in internal domains list (case-insensitive)
       if (emailDomain && internalDomainsLower.includes(emailDomain)) {
+        functions.logger.info(`🔍 Filtering out email from internal domain: ${email} (domain: ${emailDomain})`);
         return false;
       }
       
@@ -1071,6 +1117,8 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     const filteredCount = originalEmailCount - filteredEmails.length;
     if (filteredCount > 0) {
       functions.logger.info(`🔍 Filtered out ${filteredCount} internal email address(es) from extracted contacts`);
+    } else if (originalEmailCount > 0) {
+      functions.logger.info(`🔍 No internal emails filtered (${originalEmailCount} emails checked)`);
     }
     
     functions.logger.info(`📊 Extracted structured data:`, {

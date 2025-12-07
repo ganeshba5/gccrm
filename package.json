@@ -23,6 +23,7 @@
     "test:process-emails": "tsx scripts/test-process-emails.ts",
     "query:email-items": "tsx scripts/query-email-created-items.ts",
     "delete:notes": "tsx scripts/delete-notes.ts",
+    "delete:by-date-range": "tsx scripts/delete-by-date-range.ts",
     "query:firestore": "tsx scripts/firestore-query.ts"
   },
   "dependencies": {
