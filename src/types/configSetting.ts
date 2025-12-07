@@ -57,6 +57,17 @@ export const PREDEFINED_CONFIG_SETTINGS = {
     category: 'notifications',
     isEditable: true,
   },
+  'email_parsing.show_routing_methods': {
+    defaultValue: [], // Empty array = only show manual items (no routingMethod)
+    valueType: 'array' as ConfigValueType,
+    description: 'Controls which smart routing methods should be visible. Options: pattern, metadata, context. Items created by routing methods not in this list will be hidden. Empty array means only manual items are shown. Users can override this with their own user setting.',
+    category: 'email_parsing',
+    isEditable: true,
+    validation: { 
+      type: 'enum', 
+      options: ['pattern', 'metadata', 'context'] 
+    },
+  },
   // Add more predefined settings here
 };
 

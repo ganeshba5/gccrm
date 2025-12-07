@@ -4,8 +4,39 @@
 
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
+import { compareTwoStrings } from 'string-similarity';
 
 const db = admin.firestore();
+
+// Configuration for fuzzy matching and parsing
+// These can be overridden by config settings
+const DEFAULT_FUZZY_MATCH_THRESHOLD = 0.8; // 80% similarity required for match
+const DEFAULT_CONTEXT_MATCH_THRESHOLD = 0.6; // 60% similarity for context-based matching
+
+/**
+ * Get configuration value for email parsing
+ * Falls back to defaults if not set
+ */
+async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
+  try {
+    const configRef = db.collection('configSettings');
+    const globalQuery = await configRef
+      .where('key', '==', `email_parsing.${key}`)
+      .where('scope', '==', 'global')
+      .limit(1)
+      .get();
+    
+    if (!globalQuery.empty) {
+      const setting = globalQuery.docs[0].data();
+      return setting.value;
+    }
+    
+    return defaultValue;
+  } catch (error) {
+    functions.logger.warn(`Could not load config for ${key}, using default:`, error);
+    return defaultValue;
+  }
+}
 
 interface EmailProcessingResult {
   processed: number;
@@ -15,24 +46,38 @@ interface EmailProcessingResult {
 
 /**
  * Clean email content - remove signatures, logos, thread history
+ * Enhanced version that preserves important structured information
  */
 function cleanEmailContent(text: string): string {
   if (!text) return '';
   
-  // Common signature patterns
-  const signaturePatterns = [
-    /^--\s*$/m,  // Standard signature delimiter
-    /^Best regards,?$/mi,
-    /^Sincerely,?$/mi,
-    /^Regards,?$/mi,
-    /^Sent from .+$/mi,
-    /^This email was sent from .+$/mi,
-    /^\[cid:.+\]$/mi,  // Embedded images
-    /<img[^>]+>/gi,  // HTML images
-    /https?:\/\/[^\s]+/gi,  // URLs (may be logos)
-  ];
-  
   let cleaned = text;
+  
+  // Remove quoted/replied content (lines starting with >)
+  cleaned = cleaned.replace(/^>\s+.*$/gm, '');
+  
+  // Remove "On [date] [person] wrote:" patterns
+  cleaned = cleaned.replace(/^On\s+.+\s+wrote:.*$/gmi, '');
+  
+  // Remove "From:" lines in thread history
+  cleaned = cleaned.replace(/^From:\s+.+$/gmi, '');
+  
+  // Remove "Sent:" lines in thread history
+  cleaned = cleaned.replace(/^Sent:\s+.+$/gmi, '');
+  
+  // Remove "To:" lines in thread history (but keep first occurrence)
+  const toMatches = cleaned.match(/^To:\s+.+$/gmi);
+  if (toMatches && toMatches.length > 1) {
+    // Remove all but the first
+    let firstFound = false;
+    cleaned = cleaned.replace(/^To:\s+.+$/gmi, (match) => {
+      if (!firstFound) {
+        firstFound = true;
+        return match;
+      }
+      return '';
+    });
+  }
   
   // Split by common delimiters and take the first meaningful part
   const parts = cleaned.split(/^--\s*$/m);
@@ -40,32 +85,66 @@ function cleanEmailContent(text: string): string {
     cleaned = parts[0].trim();
   }
   
+  // Split by "---" or "===" delimiters
+  const altParts = cleaned.split(/^[-=]{3,}\s*$/m);
+  if (altParts.length > 1) {
+    cleaned = altParts[0].trim();
+  }
+  
   // Remove common signature lines
   const lines = cleaned.split('\n');
   const meaningfulLines: string[] = [];
   let foundSignature = false;
   
-  for (const line of lines) {
+  const signatureStarters = [
+    /^(Best regards|Sincerely|Regards|Thanks|Thank you|Yours|Cheers|Best),?$/i,
+    /^(Sent from|This email was sent from)/i,
+    /^--\s*$/,
+    /^---\s*$/,
+  ];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
     // Check if this line starts a signature
-    if (line.match(/^(Best regards|Sincerely|Regards|Thanks|Thank you),?$/i)) {
-      foundSignature = true;
-      break;
+    for (const pattern of signatureStarters) {
+      if (pattern.test(line)) {
+        foundSignature = true;
+        break;
+      }
+    }
+    
+    if (foundSignature) {
+      // Check if this might be important info (dates, amounts) before skipping
+      const hasImportantInfo = /(\$[\d,]+|deadline|due date|meeting|follow up|\d{1,2}[\/\-]\d{1,2})/i.test(line);
+      if (!hasImportantInfo) {
+        continue;
+      }
     }
     
     // Skip lines that look like signatures
-    if (foundSignature || line.match(/^Sent from|^This email was sent from/i)) {
+    if (line.match(/^Sent from|^This email was sent from|^\[cid:|^<img/i)) {
       continue;
     }
     
-    // Skip embedded image references
-    if (line.match(/^\[cid:|<img/i)) {
+    // Skip lines that are just URLs
+    if (line.match(/^https?:\/\/[^\s]+$/i)) {
+      continue;
+    }
+    
+    // Skip lines that are just email addresses
+    if (line.match(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$/)) {
       continue;
     }
     
     meaningfulLines.push(line);
   }
   
-  return meaningfulLines.join('\n').trim();
+  // Remove excessive whitespace
+  cleaned = meaningfulLines.join('\n').trim();
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n'); // Max 2 consecutive newlines
+  
+  return cleaned;
 }
 
 /**
@@ -159,37 +238,54 @@ function calculateSimilarity(text1: string, text2: string): number {
 }
 
 /**
- * Parse explicit routing pattern: "Account: <name>, Opportunity: <name>"
- * Looks for keywords Account: and Opportunity: only in the Content field
- * Extracts all content following Account: and Opportunity:, trimming left spaces
+ * Parse explicit routing pattern with enhanced pattern recognition
+ * Supports multiple variations: Account/Company/Client/Customer/Organization and Opportunity/Deal/Project/Engagement/Lead
+ * Looks in both content and subject line
  */
-function parseRoutingPattern(content: string): { accountName?: string; opportunityName?: string } | null {
-  if (!content) {
-    functions.logger.info('🔍 parseRoutingPattern: No content provided');
+function parseRoutingPattern(content: string, subject?: string): { accountName?: string; opportunityName?: string } | null {
+  if (!content && !subject) {
+    functions.logger.info('🔍 parseRoutingPattern: No content or subject provided');
     return null;
   }
+  
+  // Combine content and subject for pattern matching
+  const searchText = `${subject || ''}\n${content || ''}`;
   
   let accountName: string | undefined;
   let opportunityName: string | undefined;
   
-  // Look for Account: pattern - capture everything after "Account:" until comma, newline, or end
-  const accountPattern = /Account:\s*([^,\n]+)/i;
-  const accountMatch = content.match(accountPattern);
-  if (accountMatch && accountMatch[1]) {
-    accountName = accountMatch[1].trim();
-    functions.logger.info(`🔍 parseRoutingPattern: Found Account pattern - raw: "${accountMatch[1]}", trimmed: "${accountName}"`);
-  } else {
-    functions.logger.info('🔍 parseRoutingPattern: Account pattern not found');
+  // Account pattern variations (case-insensitive, with/without colon)
+  const accountPatterns = [
+    /(?:Account|Company|Client|Customer|Organization|Org):\s*([^,\n]+)/i,
+    /(?:Account|Company|Client|Customer|Organization|Org)\s+is\s+([^,\n]+)/i,
+    /(?:Account|Company|Client|Customer|Organization|Org)\s+=\s+([^,\n]+)/i,
+  ];
+  
+  // Try each account pattern
+  for (const pattern of accountPatterns) {
+    const match = searchText.match(pattern);
+    if (match && match[1]) {
+      accountName = match[1].trim();
+      functions.logger.info(`🔍 parseRoutingPattern: Found Account pattern - raw: "${match[1]}", trimmed: "${accountName}"`);
+      break;
+    }
   }
   
-  // Look for Opportunity: pattern - capture everything after "Opportunity:" until newline or end
-  const opportunityPattern = /Opportunity:\s*([^\n]+)/i;
-  const opportunityMatch = content.match(opportunityPattern);
-  if (opportunityMatch && opportunityMatch[1]) {
-    opportunityName = opportunityMatch[1].trim();
-    functions.logger.info(`🔍 parseRoutingPattern: Found Opportunity pattern - raw: "${opportunityMatch[1]}", trimmed: "${opportunityName}"`);
-  } else {
-    functions.logger.info('🔍 parseRoutingPattern: Opportunity pattern not found');
+  // Opportunity pattern variations (case-insensitive, with/without colon)
+  const opportunityPatterns = [
+    /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal):\s*([^\n]+)/i,
+    /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal)\s+is\s+([^\n]+)/i,
+    /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal)\s+=\s+([^\n]+)/i,
+  ];
+  
+  // Try each opportunity pattern
+  for (const pattern of opportunityPatterns) {
+    const match = searchText.match(pattern);
+    if (match && match[1]) {
+      opportunityName = match[1].trim();
+      functions.logger.info(`🔍 parseRoutingPattern: Found Opportunity pattern - raw: "${match[1]}", trimmed: "${opportunityName}"`);
+      break;
+    }
   }
   
   // Return result if at least account name was found
@@ -206,25 +302,59 @@ function parseRoutingPattern(content: string): { accountName?: string; opportuni
 }
 
 /**
- * Find or create account by name
+ * Find or create account by name with fuzzy matching
  */
-async function findOrCreateAccount(accountName: string, createdBy: string): Promise<string> {
+async function findOrCreateAccount(
+  accountName: string, 
+  createdBy: string,
+  routingMethod?: 'pattern' | 'metadata' | 'context',
+  routingConfidence?: number
+): Promise<string> {
   try {
     const accountsRef = db.collection('accounts');
+    const trimmedName = accountName.trim();
     
-    // Try to find existing account
-    const existingQuery = await accountsRef
-      .where('name', '==', accountName.trim())
+    // Get fuzzy match threshold from config
+    const fuzzyThreshold = await getParsingConfig('fuzzy_match_threshold', DEFAULT_FUZZY_MATCH_THRESHOLD);
+    
+    // First, try exact match
+    const exactQuery = await accountsRef
+      .where('name', '==', trimmedName)
       .limit(1)
       .get();
     
-    if (!existingQuery.empty) {
-      return existingQuery.docs[0].id;
+    if (!exactQuery.empty) {
+      functions.logger.info(`✅ Found exact account match: ${trimmedName}`);
+      return exactQuery.docs[0].id;
     }
     
-    // Create new account
-    const accountData = {
-      name: accountName.trim(),
+    // If no exact match, try fuzzy matching
+    const allAccountsSnapshot = await accountsRef.get();
+    let bestMatch: { id: string; name: string; similarity: number } | null = null;
+    
+    for (const doc of allAccountsSnapshot.docs) {
+      const existingName = doc.data().name || '';
+      const similarity = compareTwoStrings(trimmedName.toLowerCase(), existingName.toLowerCase());
+      
+      if (similarity >= fuzzyThreshold) {
+        if (!bestMatch || similarity > bestMatch.similarity) {
+          bestMatch = {
+            id: doc.id,
+            name: existingName,
+            similarity,
+          };
+        }
+      }
+    }
+    
+    if (bestMatch) {
+      functions.logger.info(`✅ Found fuzzy account match: "${trimmedName}" -> "${bestMatch.name}" (similarity: ${(bestMatch.similarity * 100).toFixed(1)}%)`);
+      return bestMatch.id;
+    }
+    
+    // No match found, create new account
+    const accountData: any = {
+      name: trimmedName,
       status: 'active',
       createdBy,
       source: 'email', // Mark as created from email processing
@@ -232,8 +362,16 @@ async function findOrCreateAccount(accountName: string, createdBy: string): Prom
       updatedAt: admin.firestore.Timestamp.now(),
     };
     
+    // Add routing information if provided
+    if (routingMethod) {
+      accountData.routingMethod = routingMethod;
+    }
+    if (routingConfidence !== undefined) {
+      accountData.routingConfidence = routingConfidence;
+    }
+    
     const docRef = await accountsRef.add(accountData);
-    functions.logger.info(`✅ Created account: ${accountName}`);
+    functions.logger.info(`✅ Created new account: ${trimmedName}`);
     return docRef.id;
   } catch (error: any) {
     functions.logger.error(`Error finding/creating account "${accountName}":`, error.message);
@@ -242,30 +380,62 @@ async function findOrCreateAccount(accountName: string, createdBy: string): Prom
 }
 
 /**
- * Find or create opportunity by name and account
+ * Find or create opportunity by name and account with fuzzy matching
  */
 async function findOrCreateOpportunity(
   opportunityName: string,
   accountId: string,
-  createdBy: string
+  createdBy: string,
+  routingMethod?: 'pattern' | 'metadata' | 'context',
+  routingConfidence?: number
 ): Promise<string> {
   try {
     const opportunitiesRef = db.collection('opportunities');
+    const trimmedName = opportunityName.trim();
     
-    // Try to find existing opportunity
-    const existingQuery = await opportunitiesRef
+    // First, get all opportunities for this account
+    const accountOpportunitiesQuery = await opportunitiesRef
       .where('accountId', '==', accountId)
-      .where('name', '==', opportunityName.trim())
-      .limit(1)
       .get();
     
-    if (!existingQuery.empty) {
-      return existingQuery.docs[0].id;
+    // Try exact match first
+    for (const doc of accountOpportunitiesQuery.docs) {
+      const existingName = doc.data().name || '';
+      if (existingName === trimmedName) {
+        functions.logger.info(`✅ Found exact opportunity match: ${trimmedName}`);
+        return doc.id;
+      }
     }
     
-    // Create new opportunity
-    const opportunityData = {
-      name: opportunityName.trim(),
+    // If no exact match, try fuzzy matching
+    let bestMatch: { id: string; name: string; similarity: number } | null = null;
+    
+    // Get fuzzy match threshold from config
+    const fuzzyThreshold = await getParsingConfig('fuzzy_match_threshold', DEFAULT_FUZZY_MATCH_THRESHOLD);
+    
+    for (const doc of accountOpportunitiesQuery.docs) {
+      const existingName = doc.data().name || '';
+      const similarity = compareTwoStrings(trimmedName.toLowerCase(), existingName.toLowerCase());
+      
+      if (similarity >= fuzzyThreshold) {
+        if (!bestMatch || similarity > bestMatch.similarity) {
+          bestMatch = {
+            id: doc.id,
+            name: existingName,
+            similarity,
+          };
+        }
+      }
+    }
+    
+    if (bestMatch) {
+      functions.logger.info(`✅ Found fuzzy opportunity match: "${trimmedName}" -> "${bestMatch.name}" (similarity: ${(bestMatch.similarity * 100).toFixed(1)}%)`);
+      return bestMatch.id;
+    }
+    
+    // No match found, create new opportunity
+    const opportunityData: any = {
+      name: trimmedName,
       accountId,
       stage: 'New',
       owner: createdBy,
@@ -275,8 +445,16 @@ async function findOrCreateOpportunity(
       updatedAt: admin.firestore.Timestamp.now(),
     };
     
+    // Add routing information if provided
+    if (routingMethod) {
+      opportunityData.routingMethod = routingMethod;
+    }
+    if (routingConfidence !== undefined) {
+      opportunityData.routingConfidence = routingConfidence;
+    }
+    
     const docRef = await opportunitiesRef.add(opportunityData);
-    functions.logger.info(`✅ Created opportunity: ${opportunityName} for account ${accountId}`);
+    functions.logger.info(`✅ Created new opportunity: ${trimmedName} for account ${accountId}`);
     return docRef.id;
   } catch (error: any) {
     functions.logger.error(`Error finding/creating opportunity "${opportunityName}":`, error.message);
@@ -285,7 +463,93 @@ async function findOrCreateOpportunity(
 }
 
 /**
+ * Extract entities from email context (rule-based, no external APIs)
+ * Uses heuristics to find account/opportunity names from email content, signatures, domains
+ */
+async function extractEntitiesFromContext(
+  email: any,
+  content: string,
+  createdBy: string
+): Promise<{ accountId?: string; opportunityId?: string } | null> {
+  try {
+    const fromEmail = email.from?.email || '';
+    const subject = email.subject || '';
+    const domain = fromEmail.split('@')[1];
+    
+    if (!domain) return null;
+    
+    // Try to extract company name from email signature
+    // Look for patterns like "Company Name" or "| Company Name" in signature area
+    const signaturePatterns = [
+      /\|\s*([A-Z][a-zA-Z\s&]+(?:Inc|LLC|Corp|Ltd|Company|Co)\.?)/i,
+      /Company:\s*([A-Z][a-zA-Z\s&]+)/i,
+      /([A-Z][a-zA-Z\s&]+(?:Inc|LLC|Corp|Ltd|Company|Co)\.?)/i,
+    ];
+    
+    let companyName: string | undefined;
+    for (const pattern of signaturePatterns) {
+      const match = content.match(pattern);
+      if (match && match[1]) {
+        companyName = match[1].trim();
+        break;
+      }
+    }
+    
+    // If no company name found, try to derive from domain
+    if (!companyName) {
+      companyName = extractCompanyName(subject, domain);
+    }
+    
+    // Try to find existing account using fuzzy matching
+    const accountsRef = db.collection('accounts');
+    const allAccountsSnapshot = await accountsRef.get();
+    const contextThreshold = await getParsingConfig('context_match_threshold', DEFAULT_CONTEXT_MATCH_THRESHOLD);
+    const contextMatchThreshold = await getParsingConfig('context_match_accept_threshold', 0.7);
+    
+    let bestMatch: { id: string; name: string; similarity: number } | null = null;
+    
+    for (const doc of allAccountsSnapshot.docs) {
+      const existingName = doc.data().name || '';
+      const similarity = compareTwoStrings(companyName.toLowerCase(), existingName.toLowerCase());
+      
+      if (similarity >= contextThreshold) { // Lower threshold for context-based matching
+        if (!bestMatch || similarity > bestMatch.similarity) {
+          bestMatch = {
+            id: doc.id,
+            name: existingName,
+            similarity,
+          };
+        }
+      }
+    }
+    
+    let accountId: string;
+    if (bestMatch && bestMatch.similarity >= contextMatchThreshold) {
+      accountId = bestMatch.id;
+      functions.logger.info(`✅ Found account via context: "${companyName}" -> "${bestMatch.name}" (similarity: ${(bestMatch.similarity * 100).toFixed(1)}%)`);
+    } else {
+      // Create new account from context
+      accountId = await findOrCreateAccount(companyName, createdBy, 'context', 0.4);
+    }
+    
+    // Extract opportunity name from subject or content
+    let opportunityName = subject.substring(0, 50);
+    if (opportunityName.length < 10) {
+      opportunityName = `Email Opportunity - ${new Date().toLocaleDateString()}`;
+    }
+    
+    const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'context', 0.4);
+    
+    return { accountId, opportunityId };
+  } catch (error: any) {
+    functions.logger.error('Error extracting entities from context:', error.message);
+    return null;
+  }
+}
+
+/**
  * Extract account/opportunity from email metadata (sender email domain, subject, etc.)
+ * Enhanced version with improved matching
  */
 async function extractFromMetadata(
   email: any,
@@ -322,11 +586,11 @@ async function extractFromMetadata(
     if (accountQuery.empty) {
       // Try to extract company name from subject or create from domain
       const companyName = extractCompanyName(subject, domain);
-      const accountId = await findOrCreateAccount(companyName, createdBy);
+      const accountId = await findOrCreateAccount(companyName, createdBy, 'metadata', 0.6);
       
       // Create a default opportunity
       const opportunityName = `Email Opportunity - ${subject.substring(0, 50)}`;
-      const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy);
+      const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'metadata', 0.6);
       
       return { accountId, opportunityId };
     }
@@ -335,7 +599,7 @@ async function extractFromMetadata(
     
     // Try to find or create opportunity for this account
     const opportunityName = `Email Opportunity - ${subject.substring(0, 50)}`;
-    const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy);
+    const opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'metadata', 0.6);
     
     return { accountId, opportunityId };
   } catch (error: any) {
@@ -359,6 +623,219 @@ function extractCompanyName(subject: string, domain: string): string {
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * Extract structured data from email content
+ * Returns dates, amounts, action items, and contacts
+ */
+function extractStructuredData(content: string, subject?: string): {
+  dates: Date[];
+  amounts: number[];
+  actionItems: string[];
+  contacts: { emails: string[]; phones: string[]; names: string[] };
+} {
+  const result = {
+    dates: [] as Date[],
+    amounts: [] as number[],
+    actionItems: [] as string[],
+    contacts: {
+      emails: [] as string[],
+      phones: [] as string[],
+      names: [] as string[],
+    },
+  };
+
+  const searchText = `${subject || ''}\n${content || ''}`;
+
+  // Extract dates (various formats)
+  const datePatterns = [
+    /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/g, // MM/DD/YYYY, DD-MM-YYYY
+    /\b(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/g, // YYYY-MM-DD
+    /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/gi, // January 15, 2024
+    /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b/gi, // January 15
+    /\b(deadline|due date|meeting|follow up|by|on|before|after)\s+([^,\n]+)/gi, // "deadline: January 15"
+    /\b(today|tomorrow|next week|next month)\b/gi,
+  ];
+
+  for (const pattern of datePatterns) {
+    const matches = searchText.matchAll(pattern);
+    for (const match of matches) {
+      try {
+        const dateStr = match[0] || match[2] || '';
+        if (dateStr.toLowerCase().includes('today')) {
+          result.dates.push(new Date());
+        } else if (dateStr.toLowerCase().includes('tomorrow')) {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          result.dates.push(tomorrow);
+        } else {
+          const parsedDate = new Date(dateStr);
+          if (!isNaN(parsedDate.getTime())) {
+            result.dates.push(parsedDate);
+          }
+        }
+      } catch (e) {
+        // Ignore invalid dates
+      }
+    }
+  }
+
+  // Extract amounts (currency values)
+  const amountPatterns = [
+    /\$[\d,]+(?:\.\d{2})?/g, // $1,000.00
+    /\b\d{1,3}(?:,\d{3})*(?:\.\d{2})?\s*(?:USD|dollars?|usd)\b/gi, // 1,000 USD
+    /\b(?:budget|amount|value|deal|contract|price|cost)\s*[:\-]?\s*\$?[\d,]+(?:\.\d{2})?/gi,
+  ];
+
+  for (const pattern of amountPatterns) {
+    const matches = searchText.matchAll(pattern);
+    for (const match of matches) {
+      const amountStr = match[0].replace(/[^0-9.]/g, '');
+      const amount = parseFloat(amountStr);
+      if (!isNaN(amount) && amount > 0) {
+        result.amounts.push(amount);
+      }
+    }
+  }
+
+  // Extract action items
+  const actionPatterns = [
+    /(?:Action|TODO|To Do|Task|Follow up|Follow-up|Action Item)[\s:]+([^\n]+)/gi,
+    /(?:Please|Kindly|Need to|Should|Must)\s+([^.\n]+)/gi,
+    /(?:Reminder|Remember to)\s+([^.\n]+)/gi,
+  ];
+
+  for (const pattern of actionPatterns) {
+    const matches = searchText.matchAll(pattern);
+    for (const match of matches) {
+      const actionItem = match[1]?.trim();
+      if (actionItem && actionItem.length > 5) {
+        result.actionItems.push(actionItem);
+      }
+    }
+  }
+
+  // Extract email addresses
+  const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+  const emailMatches = searchText.matchAll(emailPattern);
+  for (const match of emailMatches) {
+    const email = match[0].toLowerCase();
+    if (!result.contacts.emails.includes(email)) {
+      result.contacts.emails.push(email);
+    }
+  }
+
+  // Extract phone numbers
+  const phonePatterns = [
+    /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, // US format
+    /\b\(\d{3}\)\s*\d{3}[-.]?\d{4}\b/g, // (123) 456-7890
+    /\b\+?\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}\b/g, // International
+  ];
+
+  for (const pattern of phonePatterns) {
+    const matches = searchText.matchAll(pattern);
+    for (const match of matches) {
+      const phone = match[0].trim();
+      if (!result.contacts.phones.includes(phone)) {
+        result.contacts.phones.push(phone);
+      }
+    }
+  }
+
+  // Extract names (simple heuristic: capitalized words that look like names)
+  const namePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g;
+  const nameMatches = searchText.matchAll(namePattern);
+  for (const match of nameMatches) {
+    const name = match[1].trim();
+    // Filter out common false positives
+    if (
+      name.length > 3 &&
+      !name.match(/^(Best|Regards|Sincerely|Thanks|Thank|Hello|Hi|Dear|Subject|From|To|CC|BCC|Account|Company|Client|Customer|Opportunity|Deal|Project|Engagement|Lead|Action|TODO|Task|Follow|Meeting|Deadline|Due|Date|Amount|Budget|Value|Price|Cost|Contract|Deal)$/i) &&
+      !result.contacts.names.includes(name)
+    ) {
+      result.contacts.names.push(name);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Analyze email for sentiment, urgency, and category
+ */
+function analyzeEmail(content: string, subject?: string): {
+  sentiment: 'positive' | 'negative' | 'neutral';
+  urgency: 'high' | 'medium' | 'low';
+  category: string;
+} {
+  const searchText = `${subject || ''}\n${content || ''}`.toLowerCase();
+
+  // Sentiment analysis (keyword-based)
+  const positiveWords = ['thank', 'thanks', 'appreciate', 'great', 'excellent', 'wonderful', 'pleased', 'happy', 'excited', 'looking forward', 'glad', 'delighted'];
+  const negativeWords = ['sorry', 'apologize', 'disappointed', 'concerned', 'worried', 'unhappy', 'frustrated', 'problem', 'issue', 'error', 'failed', 'unable'];
+
+  let positiveCount = 0;
+  let negativeCount = 0;
+
+  for (const word of positiveWords) {
+    if (searchText.includes(word)) positiveCount++;
+  }
+  for (const word of negativeWords) {
+    if (searchText.includes(word)) negativeCount++;
+  }
+
+  let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
+  if (positiveCount > negativeCount && positiveCount > 0) {
+    sentiment = 'positive';
+  } else if (negativeCount > positiveCount && negativeCount > 0) {
+    sentiment = 'negative';
+  }
+
+  // Urgency detection
+  const urgencyKeywords = {
+    high: ['urgent', 'asap', 'as soon as possible', 'immediately', 'emergency', 'critical', 'important', 'deadline', 'due today', 'today'],
+    medium: ['soon', 'quickly', 'priority', 'important', 'please respond', 'follow up'],
+    low: ['when convenient', 'no rush', 'whenever', 'at your convenience'],
+  };
+
+  let urgency: 'high' | 'medium' | 'low' = 'low';
+  for (const keyword of urgencyKeywords.high) {
+    if (searchText.includes(keyword)) {
+      urgency = 'high';
+      break;
+    }
+  }
+  if (urgency === 'low') {
+    for (const keyword of urgencyKeywords.medium) {
+      if (searchText.includes(keyword)) {
+        urgency = 'medium';
+        break;
+      }
+    }
+  }
+
+  // Category classification
+  let category = 'General';
+  const categoryPatterns = [
+    { pattern: /inquiry|question|ask|information|request/i, category: 'Inquiry' },
+    { pattern: /proposal|quote|estimate|pricing|bid/i, category: 'Proposal' },
+    { pattern: /follow.?up|following|checking|status/i, category: 'Follow-up' },
+    { pattern: /complaint|issue|problem|error|concern/i, category: 'Complaint' },
+    { pattern: /support|help|assistance|troubleshoot/i, category: 'Support' },
+    { pattern: /meeting|call|schedule|appointment/i, category: 'Meeting' },
+    { pattern: /order|purchase|buy|transaction/i, category: 'Order' },
+    { pattern: /thank|appreciation|gratitude/i, category: 'Thank You' },
+  ];
+
+  for (const { pattern, category: cat } of categoryPatterns) {
+    if (pattern.test(searchText)) {
+      category = cat;
+      break;
+    }
+  }
+
+  return { sentiment, urgency, category };
 }
 
 /**
@@ -395,6 +872,23 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       return false;
     }
     
+    // Extract structured data
+    const extractedData = extractStructuredData(content, email.subject);
+    functions.logger.info(`📊 Extracted structured data:`, {
+      dates: extractedData.dates.length,
+      amounts: extractedData.amounts.length,
+      actionItems: extractedData.actionItems.length,
+      contacts: {
+        emails: extractedData.contacts.emails.length,
+        phones: extractedData.contacts.phones.length,
+        names: extractedData.contacts.names.length,
+      },
+    });
+    
+    // Analyze email
+    const analysis = analyzeEmail(content, email.subject);
+    functions.logger.info(`📈 Email analysis:`, analysis);
+    
     // Debug: Show content being parsed (first 500 chars)
     functions.logger.info(`📄 Email content (first 500 chars) for pattern matching:`, {
       subject: email.subject,
@@ -409,11 +903,14 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       return false;
     }
     
-    // Try to parse explicit routing pattern from content only
+    // Smart routing with confidence scoring
     let accountId: string | undefined;
     let opportunityId: string | undefined;
+    let routingMethod: 'pattern' | 'metadata' | 'context' | undefined;
+    let routingConfidence = 0;
     
-    const routing = parseRoutingPattern(content);
+    // Step 1: Try explicit pattern matching (highest confidence)
+    const routing = parseRoutingPattern(content, email.subject);
     functions.logger.info(`🔍 Pattern matching results for email "${email.subject}":`, {
       accountName: routing?.accountName || 'NOT FOUND',
       opportunityName: routing?.opportunityName || 'NOT FOUND',
@@ -421,35 +918,107 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     });
     
     if (routing?.accountName) {
+      routingMethod = 'pattern';
+      routingConfidence = 0.9; // High confidence for explicit patterns
+      
       functions.logger.info(`📝 Creating/finding Account with name: "${routing.accountName}"`);
-      accountId = await findOrCreateAccount(routing.accountName, createdBy);
+      accountId = await findOrCreateAccount(routing.accountName, createdBy, 'pattern', 0.9);
       functions.logger.info(`✅ Account ID: ${accountId}`);
       
       if (routing.opportunityName) {
         functions.logger.info(`📝 Creating/finding Opportunity with name: "${routing.opportunityName}" for Account: ${accountId}`);
-        opportunityId = await findOrCreateOpportunity(routing.opportunityName, accountId, createdBy);
+        opportunityId = await findOrCreateOpportunity(routing.opportunityName, accountId, createdBy, 'pattern', 0.9);
         functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
       } else {
         // Create default opportunity if not specified
         const opportunityName = `Email Opportunity - ${email.subject?.substring(0, 50) || 'New'}`;
         functions.logger.info(`📝 Creating default Opportunity with name: "${opportunityName}" for Account: ${accountId}`);
-        opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy);
+        opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'pattern', 0.7);
+        routingConfidence = 0.7; // Lower confidence when opportunity name not provided
         functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
       }
     }
     
-    // Metadata-based routing is disabled for now
-    // if (!routing?.accountName) {
-    //   const metadataResult = await extractFromMetadata(email, createdBy);
-    //   if (metadataResult) {
-    //     accountId = metadataResult.accountId;
-    //     opportunityId = metadataResult.opportunityId;
-    //   }
-    // }
+    // Step 2: Try metadata-based routing (medium confidence)
+    if (!accountId) {
+      routingMethod = 'metadata';
+      routingConfidence = 0.6;
+      const metadataResult = await extractFromMetadata(email, createdBy);
+      if (metadataResult) {
+        accountId = metadataResult.accountId;
+        opportunityId = metadataResult.opportunityId;
+        functions.logger.info(`✅ Metadata-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
+      } else {
+        routingConfidence = 0;
+      }
+    }
+    
+    // Step 3: Try rule-based entity extraction from context (lower confidence)
+    if (!accountId) {
+      routingMethod = 'context';
+      routingConfidence = 0.4;
+      const contextResult = await extractEntitiesFromContext(email, content, createdBy);
+      if (contextResult) {
+        accountId = contextResult.accountId;
+        opportunityId = contextResult.opportunityId;
+        functions.logger.info(`✅ Context-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
+      } else {
+        routingConfidence = 0;
+      }
+    }
     
     if (!opportunityId) {
-      functions.logger.info(`⏭️  Skipping email - could not determine opportunity (no routing pattern found): ${email.subject}`);
+      functions.logger.info(`⏭️  Skipping email - could not determine opportunity (no routing method succeeded): ${email.subject}`);
+      // Update email with analysis even if not processed
+      await emailDoc.ref.update({
+        extractedData: {
+          dates: extractedData.dates.map(d => admin.firestore.Timestamp.fromDate(d)),
+          amounts: extractedData.amounts,
+          actionItems: extractedData.actionItems,
+          contacts: extractedData.contacts,
+        },
+        analysis,
+        routingConfidence: 0,
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
       return false;
+    }
+    
+    // Update opportunity with extracted amount if found
+    if (extractedData.amounts.length > 0 && opportunityId) {
+      const maxAmount = Math.max(...extractedData.amounts);
+      try {
+        await db.collection('opportunities').doc(opportunityId).update({
+          amount: maxAmount,
+          updatedAt: admin.firestore.Timestamp.now(),
+        });
+        functions.logger.info(`💰 Updated opportunity ${opportunityId} with amount: $${maxAmount}`);
+      } catch (error: any) {
+        functions.logger.warn(`Could not update opportunity amount: ${error.message}`);
+      }
+    }
+    
+    // Create tasks from action items
+    if (extractedData.actionItems.length > 0 && opportunityId) {
+      const tasksRef = db.collection('tasks');
+      for (const actionItem of extractedData.actionItems.slice(0, 5)) { // Limit to 5 tasks per email
+        try {
+          await tasksRef.add({
+            title: actionItem.substring(0, 200), // Truncate if too long
+            description: `Action item from email: ${email.subject}`,
+            status: 'not_started',
+            priority: analysis.urgency === 'high' ? 'high' : analysis.urgency === 'medium' ? 'medium' : 'low',
+            opportunityId,
+            accountId,
+            createdBy,
+            createdAt: admin.firestore.Timestamp.now(),
+            updatedAt: admin.firestore.Timestamp.now(),
+          });
+          functions.logger.info(`✅ Created task from action item: ${actionItem.substring(0, 50)}`);
+        } catch (error: any) {
+          functions.logger.warn(`Could not create task from action item: ${error.message}`);
+        }
+      }
     }
     
     // Create note with email content
@@ -468,7 +1037,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     const noteRef = await db.collection('notes').add(noteData);
     const noteId = noteRef.id;
     
-    // Update email record
+    // Update email record with all extracted data and analysis
     await emailDoc.ref.update({
       processed: true,
       linkedTo: {
@@ -477,10 +1046,18 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
         noteId,
         parentType: 'opportunity',
       },
+      extractedData: {
+        dates: extractedData.dates.map(d => admin.firestore.Timestamp.fromDate(d)),
+        amounts: extractedData.amounts,
+        actionItems: extractedData.actionItems,
+        contacts: extractedData.contacts,
+      },
+      analysis,
+      routingConfidence,
       updatedAt: admin.firestore.Timestamp.now(),
     });
     
-    functions.logger.info(`✅ Processed email: ${email.subject} -> Opportunity ${opportunityId}, Note ${noteId}`);
+    functions.logger.info(`✅ Processed email: ${email.subject} -> Opportunity ${opportunityId}, Note ${noteId} (routing: ${routingMethod}, confidence: ${(routingConfidence * 100).toFixed(0)}%)`);
     return true;
   } catch (error: any) {
     functions.logger.error(`Error processing email ${emailDoc.id}:`, error.message);

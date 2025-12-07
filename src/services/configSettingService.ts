@@ -1,7 +1,7 @@
 import {
   collection,
   doc,
-  setDoc,
+  addDoc,
   updateDoc,
   deleteDoc,
   getDoc,
@@ -204,8 +204,7 @@ class ConfigSettingService {
         // Create new setting
         settingData.createdAt = now;
         settingData.createdBy = user.id;
-        const docRef = doc(this.db, this.collectionName);
-        await setDoc(docRef, settingData);
+        const docRef = await addDoc(this.settingsRef, settingData);
         return docRef.id;
       }
     } catch (error: any) {

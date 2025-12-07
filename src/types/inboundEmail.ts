@@ -29,6 +29,22 @@ export interface InboundEmail {
   labels?: string[];                    // Gmail labels
   snippet?: string;                     // Email snippet/preview
   createdBy?: string;                   // User who processed/linked the email
+  extractedData?: {                     // Structured data extracted from email
+    dates?: Date[];                     // Dates found in email
+    amounts?: number[];                 // Currency amounts found
+    actionItems?: string[];             // Action items/tasks identified
+    contacts?: {                        // Contact information extracted
+      emails?: string[];
+      phones?: string[];
+      names?: string[];
+    };
+  };
+  analysis?: {                          // Email analysis results
+    sentiment?: 'positive' | 'negative' | 'neutral';
+    urgency?: 'high' | 'medium' | 'low';
+    category?: string;                  // Category classification
+  };
+  routingConfidence?: number;           // Confidence score for routing (0-1)
   createdAt: Date;                      // When record was created in CRM
   updatedAt: Date;                      // When record was last updated
 }

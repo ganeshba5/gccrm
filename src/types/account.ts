@@ -32,6 +32,8 @@ export interface Account {
   sharedUsers?: SharedUser[];         // List of users with shared access
   createdBy: string;                 // User UID who created the account
   source?: string;                    // Source of creation (e.g., 'email', 'import', 'manual')
+  routingMethod?: 'pattern' | 'metadata' | 'context';  // Smart routing method used
+  routingConfidence?: number;                            // Confidence score (0-1)
   createdAt: Date;
   updatedAt: Date;
   lastContact?: Date;

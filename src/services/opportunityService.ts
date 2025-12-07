@@ -16,6 +16,7 @@ import {
 import { db } from '../lib/firebase';
 import { ensureAuthenticated } from '../lib/firebase-helpers';
 import { getCurrentUser, canAccessAllData } from '../lib/auth-helpers';
+import { configSettingService } from './configSettingService';
 import type { Opportunity, OpportunityFormData } from '../types/opportunity';
 
 class OpportunityService {
@@ -278,7 +279,27 @@ class OpportunityService {
         });
       }
       
-      return docs.map(doc => this.convertToOpportunity(doc as DocumentSnapshot));
+      // Convert to Opportunity objects
+      let opportunities = docs.map(doc => this.convertToOpportunity(doc as DocumentSnapshot));
+      
+      // Filter by show_routing_methods config setting
+      // Check user setting first, then global, then default (empty array = only manual)
+      const showRoutingMethods = await configSettingService.getConfigValue<string[]>(
+        'email_parsing.show_routing_methods',
+        currentUser.id
+      );
+      
+      if (showRoutingMethods !== null && Array.isArray(showRoutingMethods)) {
+        // Filter opportunities: show if no routingMethod (manual/import) OR if routingMethod is in allowed list
+        opportunities = opportunities.filter(opp => {
+          if (!opp.routingMethod) {
+            return true; // Show opportunities without routing method (manual/import)
+          }
+          return showRoutingMethods.includes(opp.routingMethod);
+        });
+      }
+      
+      return opportunities;
     } catch (error) {
       console.error('Error getting opportunities:', error);
       throw error;
@@ -347,6 +368,9 @@ class OpportunityService {
       owner: data?.owner ?? '',
       sharedUsers: data?.sharedUsers || undefined,
       createdBy: data?.createdBy ?? '',
+      source: data?.source,
+      routingMethod: data?.routingMethod,
+      routingConfidence: data?.routingConfidence,
       createdAt: (data?.createdAt as Timestamp).toDate(),
       updatedAt: (data?.updatedAt as Timestamp).toDate(),
     };
