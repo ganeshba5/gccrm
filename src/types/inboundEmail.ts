@@ -45,8 +45,16 @@ export interface InboundEmail {
     category?: string;                  // Category classification
   };
   routingConfidence?: number;           // Confidence score for routing (0-1)
+  auditMessages?: AuditMessage[];      // Audit trail of processing attempts
   createdAt: Date;                      // When record was created in CRM
   updatedAt: Date;                      // When record was last updated
+}
+
+export interface AuditMessage {
+  timestamp: Date;                      // When the message was created
+  status: 'success' | 'failure' | 'skipped' | 'warning' | 'info';
+  message: string;                      // Human-readable message
+  details?: any;                        // Additional details (optional)
 }
 
 export interface EmailAttachment {

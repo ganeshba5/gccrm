@@ -20,6 +20,7 @@
     "import:excel": "tsx scripts/import-excel.ts",
     "fetch:emails": "tsx scripts/fetch-gmail-emails.ts",
     "test:fetch-emails": "tsx scripts/test-fetch-emails-function.ts",
+    "test:process-emails": "tsx scripts/test-process-emails.ts",
     "query:email-items": "tsx scripts/query-email-created-items.ts"
   },
   "dependencies": {

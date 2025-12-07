@@ -841,20 +841,58 @@ function analyzeEmail(content: string, subject?: string): {
 /**
  * Process a single email
  */
+/**
+ * Add an audit message to the email document
+ */
+async function addAuditMessage(
+  emailDoc: admin.firestore.DocumentSnapshot,
+  status: 'success' | 'failure' | 'skipped' | 'warning' | 'info',
+  message: string,
+  details?: any
+): Promise<void> {
+  try {
+    const email = emailDoc.data();
+    const existingMessages = (email?.auditMessages || []) as any[];
+    const newMessage = {
+      timestamp: admin.firestore.Timestamp.now(),
+      status,
+      message,
+      ...(details && { details }),
+    };
+    
+    // Append to existing messages array
+    const updatedMessages = [...existingMessages, newMessage];
+    
+    await emailDoc.ref.update({
+      auditMessages: updatedMessages,
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+  } catch (error: any) {
+    functions.logger.warn(`Could not add audit message: ${error.message}`);
+  }
+}
+
 async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdBy: string): Promise<boolean> {
   try {
     const email = emailDoc.data();
-    if (!email) return false;
+    if (!email) {
+      await addAuditMessage(emailDoc, 'failure', 'Email data not found');
+      return false;
+    }
     
     // Skip if already processed
     if (email.processed) {
+      await addAuditMessage(emailDoc, 'info', 'Email already processed, skipping');
       return false;
     }
+    
+    await addAuditMessage(emailDoc, 'info', 'Starting email processing');
     
     // Skip if subject contains "testing"
     const subject = (email.subject || '').toLowerCase();
     if (subject.includes('testing')) {
       functions.logger.info(`⏭️  Skipping email with "testing" in subject: ${email.subject}`);
+      await addAuditMessage(emailDoc, 'skipped', 'Email skipped: subject contains "testing"', { subject: email.subject });
       await emailDoc.ref.update({ processed: true, updatedAt: admin.firestore.Timestamp.now() });
       return false;
     }
@@ -869,6 +907,17 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     
     if (!content || content.trim().length < 10) {
       functions.logger.info(`⏭️  Skipping email with insufficient content: ${email.subject}`);
+      await addAuditMessage(
+        emailDoc, 
+        'skipped', 
+        'Email skipped: insufficient content after cleaning', 
+        { contentLength: content?.trim().length || 0 }
+      );
+      // Mark as processed to avoid infinite retries
+      await emailDoc.ref.update({ 
+        processed: true, 
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
       return false;
     }
     
@@ -899,6 +948,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     // Check if content already processed in thread
     if (await isContentAlreadyProcessed(content, email.threadId)) {
       functions.logger.info(`⏭️  Skipping email - content already processed in thread: ${email.subject}`);
+      await addAuditMessage(emailDoc, 'skipped', 'Email skipped: content already processed in thread', { threadId: email.threadId });
       await emailDoc.ref.update({ processed: true, updatedAt: admin.firestore.Timestamp.now() });
       return false;
     }
@@ -924,11 +974,13 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       functions.logger.info(`📝 Creating/finding Account with name: "${routing.accountName}"`);
       accountId = await findOrCreateAccount(routing.accountName, createdBy, 'pattern', 0.9);
       functions.logger.info(`✅ Account ID: ${accountId}`);
+      await addAuditMessage(emailDoc, 'success', `Account found/created via pattern matching`, { accountId, accountName: routing.accountName });
       
       if (routing.opportunityName) {
         functions.logger.info(`📝 Creating/finding Opportunity with name: "${routing.opportunityName}" for Account: ${accountId}`);
         opportunityId = await findOrCreateOpportunity(routing.opportunityName, accountId, createdBy, 'pattern', 0.9);
         functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
+        await addAuditMessage(emailDoc, 'success', `Opportunity found/created via pattern matching`, { opportunityId, opportunityName: routing.opportunityName });
       } else {
         // Create default opportunity if not specified
         const opportunityName = `Email Opportunity - ${email.subject?.substring(0, 50) || 'New'}`;
@@ -936,6 +988,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
         opportunityId = await findOrCreateOpportunity(opportunityName, accountId, createdBy, 'pattern', 0.7);
         routingConfidence = 0.7; // Lower confidence when opportunity name not provided
         functions.logger.info(`✅ Opportunity ID: ${opportunityId}`);
+        await addAuditMessage(emailDoc, 'success', `Default opportunity created (no name in pattern)`, { opportunityId, opportunityName });
       }
     }
     
@@ -948,8 +1001,10 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
         accountId = metadataResult.accountId;
         opportunityId = metadataResult.opportunityId;
         functions.logger.info(`✅ Metadata-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
+        await addAuditMessage(emailDoc, 'success', `Account and opportunity found/created via metadata routing`, { accountId, opportunityId });
       } else {
         routingConfidence = 0;
+        await addAuditMessage(emailDoc, 'warning', 'Metadata-based routing attempted but no account/opportunity found');
       }
     }
     
@@ -962,13 +1017,21 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
         accountId = contextResult.accountId;
         opportunityId = contextResult.opportunityId;
         functions.logger.info(`✅ Context-based routing successful: Account ${accountId}, Opportunity ${opportunityId}`);
+        await addAuditMessage(emailDoc, 'success', `Account and opportunity found/created via context-based routing`, { accountId, opportunityId });
       } else {
         routingConfidence = 0;
+        await addAuditMessage(emailDoc, 'warning', 'Context-based routing attempted but no account/opportunity found');
       }
     }
     
     if (!opportunityId) {
       functions.logger.info(`⏭️  Skipping email - could not determine opportunity (no routing method succeeded): ${email.subject}`);
+      await addAuditMessage(
+        emailDoc, 
+        'failure', 
+        'Email processing failed: Could not determine opportunity (no routing method succeeded)', 
+        { routingMethod, routingConfidence }
+      );
       // Update email with analysis even if not processed
       await emailDoc.ref.update({
         extractedData: {
@@ -993,12 +1056,15 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
           updatedAt: admin.firestore.Timestamp.now(),
         });
         functions.logger.info(`💰 Updated opportunity ${opportunityId} with amount: $${maxAmount}`);
+        await addAuditMessage(emailDoc, 'success', `Updated opportunity with extracted amount`, { opportunityId, amount: maxAmount });
       } catch (error: any) {
         functions.logger.warn(`Could not update opportunity amount: ${error.message}`);
+        await addAuditMessage(emailDoc, 'warning', `Failed to update opportunity amount`, { error: error.message });
       }
     }
     
     // Create tasks from action items
+    let tasksCreated = 0;
     if (extractedData.actionItems.length > 0 && opportunityId) {
       const tasksRef = db.collection('tasks');
       for (const actionItem of extractedData.actionItems.slice(0, 5)) { // Limit to 5 tasks per email
@@ -1015,9 +1081,14 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
             updatedAt: admin.firestore.Timestamp.now(),
           });
           functions.logger.info(`✅ Created task from action item: ${actionItem.substring(0, 50)}`);
+          tasksCreated++;
         } catch (error: any) {
           functions.logger.warn(`Could not create task from action item: ${error.message}`);
+          await addAuditMessage(emailDoc, 'warning', `Failed to create task from action item`, { actionItem: actionItem.substring(0, 50), error: error.message });
         }
+      }
+      if (tasksCreated > 0) {
+        await addAuditMessage(emailDoc, 'success', `Created ${tasksCreated} task(s) from action items`, { tasksCreated, totalActionItems: extractedData.actionItems.length });
       }
     }
     
@@ -1057,10 +1128,36 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       updatedAt: admin.firestore.Timestamp.now(),
     });
     
+    // Add final success audit message
+    await addAuditMessage(
+      emailDoc, 
+      'success', 
+      'Email processing completed successfully', 
+      {
+        accountId,
+        opportunityId,
+        noteId,
+        routingMethod,
+        routingConfidence: (routingConfidence * 100).toFixed(0) + '%',
+        tasksCreated,
+        extractedDataCounts: {
+          dates: extractedData.dates.length,
+          amounts: extractedData.amounts.length,
+          actionItems: extractedData.actionItems.length,
+        }
+      }
+    );
+    
     functions.logger.info(`✅ Processed email: ${email.subject} -> Opportunity ${opportunityId}, Note ${noteId} (routing: ${routingMethod}, confidence: ${(routingConfidence * 100).toFixed(0)}%)`);
     return true;
   } catch (error: any) {
     functions.logger.error(`Error processing email ${emailDoc.id}:`, error.message);
+    await addAuditMessage(
+      emailDoc, 
+      'failure', 
+      `Email processing failed with error: ${error.message}`, 
+      { error: error.message, stack: error.stack }
+    );
     return false;
   }
 }
