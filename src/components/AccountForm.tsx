@@ -282,8 +282,11 @@ export function AccountForm() {
   const loadOpportunities = async (accountId: string) => {
     try {
       setOpportunitiesLoading(true);
+      // Get all opportunities linked to this account (no permission filtering)
+      // This ensures all child opportunities are visible when viewing an account
       const allOpportunities = await opportunityService.getByAccount(accountId);
       setOpportunities(allOpportunities);
+      console.log(`Loaded ${allOpportunities.length} opportunities for account ${accountId}`);
     } catch (err) {
       console.error('Error loading opportunities:', err);
       setOpportunities([]);

@@ -19,7 +19,7 @@ export function AccountList() {
   const [accountFocused, setAccountFocused] = useState<boolean>(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [viewHistoryFrom, setViewHistoryFrom] = useState<Date | null>(null);
-  const [accountFilter, setAccountFilter] = useState<'all' | 'my'>('all');
+  const [accountFilter, setAccountFilter] = useState<'all' | 'my'>('my');
 
   useEffect(() => {
     loadAccounts();

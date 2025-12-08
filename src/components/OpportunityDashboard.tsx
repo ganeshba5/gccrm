@@ -38,7 +38,7 @@ export default function OpportunityDashboard() {
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
-  const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>('all');
+  const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>('my');
   const [dateFilterType, setDateFilterType] = useState<string>(() => {
     const saved = localStorage.getItem('opportunities_dateFilterType');
     // If no saved value, default to current year (first time use)

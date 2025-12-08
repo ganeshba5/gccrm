@@ -308,6 +308,8 @@ class OpportunityService {
 
   async getByAccount(accountId: string): Promise<Opportunity[]> {
     try {
+      // Get all opportunities for this account - no permission filtering
+      // This ensures all child opportunities are visible when viewing an account
       const q = query(
         this.opportunitiesRef,
         where('accountId', '==', accountId),
@@ -315,8 +317,36 @@ class OpportunityService {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => this.convertToOpportunity(doc as DocumentSnapshot));
-    } catch (error) {
+      const opportunities = querySnapshot.docs.map(doc => this.convertToOpportunity(doc as DocumentSnapshot));
+      
+      // Log for debugging
+      console.log(`Found ${opportunities.length} opportunities for account ${accountId}`);
+      
+      return opportunities;
+    } catch (error: any) {
+      // If orderBy fails (e.g., missing index), try without orderBy
+      if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+        console.warn('OrderBy query failed, trying without orderBy:', error);
+        try {
+          const q = query(
+            this.opportunitiesRef,
+            where('accountId', '==', accountId)
+          );
+          const querySnapshot = await getDocs(q);
+          const opportunities = querySnapshot.docs.map(doc => this.convertToOpportunity(doc as DocumentSnapshot));
+          // Sort in memory
+          opportunities.sort((a, b) => {
+            const aTime = a.createdAt?.getTime() || 0;
+            const bTime = b.createdAt?.getTime() || 0;
+            return bTime - aTime; // Descending
+          });
+          console.log(`Found ${opportunities.length} opportunities for account ${accountId} (without orderBy)`);
+          return opportunities;
+        } catch (fallbackError) {
+          console.error('Error getting opportunities by account (fallback):', fallbackError);
+          throw fallbackError;
+        }
+      }
       console.error('Error getting opportunities by account:', error);
       throw error;
     }
