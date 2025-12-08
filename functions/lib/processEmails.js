@@ -55,6 +55,7 @@ async function getParsingConfig(key, defaultValue) {
     try {
         const configKey = `email_parsing.${key}`;
         const configRef = db.collection('configSettings');
+        // First, let's try to find the document
         const globalQuery = await configRef
             .where('key', '==', configKey)
             .where('scope', '==', 'global')
@@ -70,10 +71,27 @@ async function getParsingConfig(key, defaultValue) {
                 value: setting.value,
                 valueType: typeof setting.value,
                 isArray: Array.isArray(setting.value),
+                documentId: globalQuery.docs[0].id,
             });
             return setting.value;
         }
-        functions.logger.warn(`⚠️  getParsingConfig: No setting found for "${configKey}", using fallback`);
+        // Debug: List all email_parsing configs to see what exists
+        functions.logger.warn(`⚠️  getParsingConfig: No setting found for "${configKey}", checking all email_parsing settings...`);
+        try {
+            const allEmailParsingQuery = await configRef
+                .where('key', '>=', 'email_parsing.')
+                .where('key', '<', 'email_parsing.\uf8ff')
+                .where('scope', '==', 'global')
+                .get();
+            functions.logger.info(`📋 Found ${allEmailParsingQuery.size} email_parsing config(s):`);
+            allEmailParsingQuery.docs.forEach(doc => {
+                const data = doc.data();
+                functions.logger.info(`  - Key: "${data.key}", Scope: "${data.scope}", Value: ${JSON.stringify(data.value)}`);
+            });
+        }
+        catch (debugError) {
+            functions.logger.warn(`Could not list email_parsing configs for debugging: ${debugError.message}`);
+        }
         // Fall back to predefined defaults for known settings
         const predefinedDefaults = {
             'apply_routing_methods': ['pattern'], // Default: only pattern matching
@@ -143,6 +161,107 @@ function cleanSubjectLine(subject, tokens) {
         }
     }
     return cleaned;
+}
+/**
+ * Check if email is a forwarded email to CRM mailbox
+ * Conditions:
+ * 1. Subject starts with "Fw:" (case-insensitive)
+ * 2. Only recipient is crm@infogloballink.com
+ */
+function isForwardedToCrm(email) {
+    var _a;
+    const subject = (email.subject || '').trim();
+    const toRecipients = email.to || [];
+    // Check if subject starts with "Fw:" (case-insensitive)
+    const subjectLower = subject.toLowerCase();
+    if (!subjectLower.startsWith('fw:')) {
+        return false;
+    }
+    // Check if only recipient is crm@infogloballink.com
+    if (toRecipients.length !== 1) {
+        return false;
+    }
+    const recipient = (_a = toRecipients[0]) === null || _a === void 0 ? void 0 : _a.toLowerCase().trim();
+    if (recipient === 'crm@infogloballink.com') {
+        return true;
+    }
+    return false;
+}
+/**
+ * Extract original From and To from forwarded email content
+ * Looks for patterns like:
+ * - "From: name <email@domain.com>"
+ * - "To: email@domain.com"
+ * - "-----Original Message-----" followed by From/To headers
+ */
+function extractForwardedEmailInfo(content) {
+    if (!content)
+        return null;
+    const result = {};
+    // Try to find forwarded email headers
+    // Look for patterns like "From:", "To:" in the content
+    // Common patterns:
+    // 1. "From: name <email@domain.com>"
+    // 2. "To: email@domain.com"
+    // 3. "-----Original Message-----" followed by headers
+    // Find the forwarded section - look for common separators
+    const separators = [
+        /-----Original Message-----/i,
+        /-----Forwarded Message-----/i,
+        /From:/i,
+        /^On .* wrote:/m,
+    ];
+    let forwardedSection = content;
+    for (const separator of separators) {
+        const match = content.match(separator);
+        if (match && match.index !== undefined) {
+            // Extract content after the separator
+            forwardedSection = content.substring(match.index);
+            break;
+        }
+    }
+    // Extract From field
+    const fromMatch = forwardedSection.match(/From:\s*(.+?)(?:\n|$)/i);
+    if (fromMatch) {
+        const fromLine = fromMatch[1].trim();
+        // Parse "Name <email@domain.com>" or just "email@domain.com"
+        const emailMatch = fromLine.match(/(.+?)\s*<(.+?)>/);
+        if (emailMatch) {
+            result.from = {
+                name: emailMatch[1].replace(/"/g, '').trim(),
+                email: emailMatch[2].trim(),
+            };
+        }
+        else {
+            // Just email address
+            const emailAddress = fromLine.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+            if (emailAddress) {
+                result.from = {
+                    email: emailAddress[1].trim(),
+                };
+            }
+        }
+    }
+    // Extract To field
+    const toMatch = forwardedSection.match(/To:\s*(.+?)(?:\n|$)/i);
+    if (toMatch) {
+        const toLine = toMatch[1].trim();
+        // Extract email addresses from the To line
+        const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+        const emails = [];
+        let emailMatch;
+        while ((emailMatch = emailRegex.exec(toLine)) !== null) {
+            emails.push(emailMatch[1].trim());
+        }
+        if (emails.length > 0) {
+            result.to = emails;
+        }
+    }
+    // If we found at least From or To, return the result
+    if (result.from || result.to) {
+        return result;
+    }
+    return null;
 }
 /**
  * Clean email content - remove signatures, logos, thread history
@@ -906,7 +1025,7 @@ async function addAuditMessage(emailDoc, status, message, details) {
     }
 }
 async function processEmail(emailDoc, createdBy) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
         const email = emailDoc.data();
         if (!email) {
@@ -929,15 +1048,44 @@ async function processEmail(emailDoc, createdBy) {
         }
         // Get email parse settings
         const parseSettings = await getEmailParseSettings();
+        // Check if this is a forwarded email to CRM mailbox
+        let processedEmail = Object.assign({}, email);
+        if (isForwardedToCrm(email)) {
+            functions.logger.info(`📧 Forwarded email to CRM detected: ${email.subject}`);
+            // Get email content to extract forwarded email info
+            const htmlContent = ((_a = email.body) === null || _a === void 0 ? void 0 : _a.html) || '';
+            const textContent = ((_b = email.body) === null || _b === void 0 ? void 0 : _b.text) || '';
+            const rawContent = textContent || extractTextFromHtml(htmlContent);
+            // Extract original From and To from forwarded content
+            const forwardedInfo = extractForwardedEmailInfo(rawContent);
+            if (forwardedInfo) {
+                functions.logger.info(`📧 Extracted forwarded email info:`, {
+                    originalFrom: forwardedInfo.from,
+                    originalTo: forwardedInfo.to,
+                });
+                // Replace email.from and email.to with extracted values
+                if (forwardedInfo.from) {
+                    processedEmail.from = forwardedInfo.from;
+                    functions.logger.info(`📧 Using forwarded From: ${forwardedInfo.from.email} (${forwardedInfo.from.name || 'no name'})`);
+                }
+                if (forwardedInfo.to && forwardedInfo.to.length > 0) {
+                    processedEmail.to = forwardedInfo.to;
+                    functions.logger.info(`📧 Using forwarded To: ${forwardedInfo.to.join(', ')}`);
+                }
+            }
+            else {
+                functions.logger.warn(`⚠️  Could not extract forwarded email info from content`);
+            }
+        }
         // Clean subject line by removing tokens (Re:, Fwd:, etc.)
-        let cleanedSubject = email.subject || '';
+        let cleanedSubject = processedEmail.subject || '';
         if (cleanedSubject && parseSettings.subjectTokens.length > 0) {
             cleanedSubject = cleanSubjectLine(cleanedSubject, parseSettings.subjectTokens);
-            functions.logger.info(`📝 Cleaned subject: "${email.subject}" -> "${cleanedSubject}"`);
+            functions.logger.info(`📝 Cleaned subject: "${processedEmail.subject}" -> "${cleanedSubject}"`);
         }
         // Check if email is from internal domain/address (for potential special handling)
-        const fromEmail = ((_a = email.from) === null || _a === void 0 ? void 0 : _a.email) || '';
-        const fromDomain = (_b = fromEmail.split('@')[1]) === null || _b === void 0 ? void 0 : _b.toLowerCase();
+        const fromEmail = ((_c = processedEmail.from) === null || _c === void 0 ? void 0 : _c.email) || '';
+        const fromDomain = (_d = fromEmail.split('@')[1]) === null || _d === void 0 ? void 0 : _d.toLowerCase();
         const isInternalEmail = (fromDomain && parseSettings.domains.includes(fromDomain)) ||
             parseSettings.emailAddresses.some(addr => addr.toLowerCase() === fromEmail.toLowerCase());
         if (isInternalEmail) {
@@ -945,8 +1093,8 @@ async function processEmail(emailDoc, createdBy) {
             // Could add special parsing logic for internal emails here if needed
         }
         // Get email content
-        const htmlContent = ((_c = email.body) === null || _c === void 0 ? void 0 : _c.html) || '';
-        const textContent = ((_d = email.body) === null || _d === void 0 ? void 0 : _d.text) || '';
+        const htmlContent = ((_e = processedEmail.body) === null || _e === void 0 ? void 0 : _e.html) || '';
+        const textContent = ((_f = processedEmail.body) === null || _f === void 0 ? void 0 : _f.text) || '';
         let content = textContent || extractTextFromHtml(htmlContent);
         // Clean content
         content = cleanEmailContent(content);
@@ -961,6 +1109,7 @@ async function processEmail(emailDoc, createdBy) {
             return false;
         }
         // Extract structured data (use cleaned subject)
+        // Use processedEmail instead of email for routing
         const extractedData = extractStructuredData(content, cleanedSubject);
         // Filter out internal email addresses from extracted contacts
         const internalEmailsLower = parseSettings.emailAddresses.map(e => e.toLowerCase().trim());
@@ -1076,7 +1225,7 @@ async function processEmail(emailDoc, createdBy) {
             if (allowedMethods.includes('metadata')) {
                 routingMethod = 'metadata';
                 routingConfidence = 0.6;
-                const metadataResult = await extractFromMetadata(email, createdBy, cleanedSubject, parseSettings);
+                const metadataResult = await extractFromMetadata(processedEmail, createdBy, cleanedSubject, parseSettings);
                 if (metadataResult) {
                     accountId = metadataResult.accountId;
                     opportunityId = metadataResult.opportunityId;
@@ -1101,7 +1250,7 @@ async function processEmail(emailDoc, createdBy) {
             if (allowedMethods.includes('context')) {
                 routingMethod = 'context';
                 routingConfidence = 0.4;
-                const contextResult = await extractEntitiesFromContext(email, content, createdBy, cleanedSubject, parseSettings);
+                const contextResult = await extractEntitiesFromContext(processedEmail, content, createdBy, cleanedSubject, parseSettings);
                 if (contextResult) {
                     accountId = contextResult.accountId;
                     opportunityId = contextResult.opportunityId;
@@ -1186,7 +1335,7 @@ async function processEmail(emailDoc, createdBy) {
             }
         }
         // Create note with email content
-        const noteContent = `Email from ${((_e = email.from) === null || _e === void 0 ? void 0 : _e.name) || ((_f = email.from) === null || _f === void 0 ? void 0 : _f.email) || 'Unknown'}\n\n${content}`;
+        const noteContent = `Email from ${((_g = processedEmail.from) === null || _g === void 0 ? void 0 : _g.name) || ((_h = processedEmail.from) === null || _h === void 0 ? void 0 : _h.email) || 'Unknown'}\n\n${content}`;
         const noteData = {
             content: noteContent,
             opportunityId,
