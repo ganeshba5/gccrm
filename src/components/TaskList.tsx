@@ -14,7 +14,7 @@ export function TaskList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterAssigned, setFilterAssigned] = useState<string>('all');
+  const [filterAssigned, setFilterAssigned] = useState<string>('me');
 
   useEffect(() => {
     loadTasks();

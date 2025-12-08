@@ -19,6 +19,7 @@ export function AccountList() {
   const [accountFocused, setAccountFocused] = useState<boolean>(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [viewHistoryFrom, setViewHistoryFrom] = useState<Date | null>(null);
+  const [accountFilter, setAccountFilter] = useState<'all' | 'my'>('all');
 
   useEffect(() => {
     loadAccounts();
@@ -121,6 +122,13 @@ export function AccountList() {
   };
 
   const filteredAccounts = accounts.filter((account) => {
+    // My Accounts / All Accounts filter
+    if (accountFilter === 'my' && user) {
+      if (account.assignedTo !== user.id && account.createdBy !== user.id) {
+        return false;
+      }
+    }
+    
     // First apply search filter
     const matchesSearch = account.name.toLowerCase().includes(accountSearch.toLowerCase());
     
@@ -154,6 +162,30 @@ export function AccountList() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* My Accounts / All Accounts Toggle */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => setAccountFilter('all')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            accountFilter === 'all'
+              ? 'bg-brand-500 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+          }`}
+        >
+          All Accounts
+        </button>
+        <button
+          onClick={() => setAccountFilter('my')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            accountFilter === 'my'
+              ? 'bg-brand-500 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+          }`}
+        >
+          My Accounts
+        </button>
+      </div>
+      
       {/* Account search combo box */}
       <div className="max-w-xs">
         <div className="relative">

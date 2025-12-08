@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
 import { configSettingService } from '../services/configSettingService';
@@ -8,6 +9,7 @@ type TabType = 'global' | 'user';
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('user');
   const [isAdmin, setIsAdmin] = useState(false);
   const [globalSettings, setGlobalSettings] = useState<ConfigSetting[]>([]);
@@ -38,6 +40,17 @@ export default function SettingsPage() {
       checkAdmin();
     }
   }, [user]);
+
+  // Check for 'new' query parameter to open create form
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      resetForm();
+      setFormData(prev => ({ ...prev, scope: activeTab as ConfigScope }));
+      setShowCreateForm(true);
+      // Remove the query parameter from URL
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, activeTab, setSearchParams]);
 
   // Load settings
   useEffect(() => {
@@ -271,25 +284,6 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Page Title */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <span className="text-4xl">⚙️</span>
-          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        </div>
-        {!showCreateForm && (
-          <button
-            onClick={() => {
-              resetForm();
-              setFormData({ ...formData, scope: activeTab as ConfigScope });
-              setShowCreateForm(true);
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            + New Setting
-          </button>
-        )}
-      </div>
 
       {/* Error Message */}
       {error && (

@@ -14,7 +14,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, signOut } = useAuth();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isMoreExpanded, setIsMoreExpanded] = useState(false);
   const [isAdminExpanded, setIsAdminExpanded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -45,12 +44,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Auto-expand sections if their items are active
   useEffect(() => {
-    const moreActive = moreMenuItems.some(item => isActive(item.path));
     const adminActive = adminMenuItems.some(item => isActive(item.path));
     
-    if (moreActive) {
-      setIsMoreExpanded(true);
-    }
     if (isAdmin && adminActive) {
       setIsAdminExpanded(true);
     }
@@ -82,7 +77,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (path.startsWith('/settings')) {
       return { icon: '⚙️', title: 'Settings' };
     }
-    return { icon: '📊', title: 'Dashboard' };
+    return { icon: '📊', title: 'Home' };
   };
 
   const getPrimaryAction = () => {
@@ -108,21 +103,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (path.startsWith('/emails')) {
       return null; // No create action for emails
     }
+    if (path.startsWith('/settings')) {
+      return { label: '+ New Setting', to: '/settings?new=true' };
+    }
     return null;
   };
 
-  // Main menu items (always visible)
+  // Main menu items (always visible, in order)
   const mainMenuItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/opportunities', label: 'Opportunities', icon: '💼' },
-    { path: '/tasks', label: 'Tasks', icon: '✅' },
-    { path: '/notes', label: 'Notes', icon: '📝' },
-  ];
-
-  // More menu items (collapsible)
-  const moreMenuItems = [
-    { path: '/contacts', label: 'Contacts', icon: '📇' },
+    { path: '/dashboard', label: 'Home', icon: '📊' },
     { path: '/accounts', label: 'Accounts', icon: '🏢' },
+    { path: '/opportunities', label: 'Opportunities', icon: '💼' },
+    { path: '/contacts', label: 'Contacts', icon: '📇' },
+    { path: '/tasks', label: 'Tasks', icon: '✅' },
     { path: '/settings', label: 'Settings', icon: '⚙️' },
   ];
 
@@ -133,7 +126,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   ];
 
   // Check if any item in a group is active
-  const isGroupActive = (items: typeof moreMenuItems) => {
+  const isGroupActive = (items: typeof adminMenuItems) => {
     return items.some(item => isActive(item.path));
   };
 
@@ -255,54 +248,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="font-medium">{item.label}</span>
             </Link>
           ))}
-
-          {/* More Menu (Collapsible) */}
-          <div className="mt-2">
-            <button
-              onClick={() => setIsMoreExpanded(!isMoreExpanded)}
-              className={`menu-item group w-full flex items-center justify-between ${
-                isGroupActive(moreMenuItems) ? 'menu-item-active' : 'menu-item-inactive'
-              }`}
-            >
-              <div className="flex items-center">
-                <span className={`menu-item-icon-size ${
-                  isGroupActive(moreMenuItems) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
-                }`}>
-                  <span className="text-xl">⋯</span>
-                </span>
-                <span className="font-medium">More</span>
-              </div>
-              <svg
-                className={`w-4 h-4 transition-transform ${isMoreExpanded ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {isMoreExpanded && (
-              <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
-                {moreMenuItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setIsSidebarOpen(false)}
-                    className={`menu-item group ${
-                      isActive(item.path) ? 'menu-item-active' : 'menu-item-inactive'
-                    }`}
-                  >
-                    <span className={`menu-item-icon-size ${
-                      isActive(item.path) ? 'menu-item-icon-active' : 'menu-item-icon-inactive'
-                    }`}>
-                      <span className="text-xl">{item.icon}</span>
-                    </span>
-                    <span className="font-medium">{item.label}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Admin Menu (Collapsible, Admin Only) */}
           {isAdmin && (
