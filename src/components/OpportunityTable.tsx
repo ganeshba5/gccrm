@@ -8,12 +8,11 @@ import { accountService } from '../services/accountService';
 interface OpportunityTableProps {
   opportunities: Opportunity[];
   accountNames: Map<string, string>; // Map of accountId -> accountName
-  userNames: Map<string, string>; // Map of userId -> user display name
   onEdit: (o: Opportunity) => void;
   onDelete: (o: Opportunity) => void;
 }
 
-export default function OpportunityTable({ opportunities, accountNames, userNames, onEdit, onDelete }: OpportunityTableProps) {
+export default function OpportunityTable({ opportunities, accountNames, onEdit, onDelete }: OpportunityTableProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   

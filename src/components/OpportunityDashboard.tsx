@@ -727,7 +727,6 @@ export default function OpportunityDashboard() {
         <OpportunityTable 
           opportunities={filteredOpportunities} 
           accountNames={accountNames}
-          userNames={userNames}
           onEdit={handleEdit}
           onDelete={handleDelete}
         />
