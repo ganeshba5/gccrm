@@ -90,6 +90,17 @@ export const PREDEFINED_CONFIG_SETTINGS = {
     category: 'email_parsing',
     isEditable: true,
   },
+  'email_parsing.fuzzy_match_threshold': {
+    defaultValue: 0.8, // 80% similarity required for match
+    valueType: 'number' as ConfigValueType,
+    description: 'Similarity threshold (0.0 to 1.0) for fuzzy matching when finding existing accounts and opportunities. Higher values (closer to 1.0) require more exact matches. Lower values allow more flexible matching. Default: 0.8 (80% similarity). Global setting only.',
+    category: 'email_parsing',
+    isEditable: true,
+    validation: {
+      type: 'min',
+      min: 0,
+    },
+  },
   // Add more predefined settings here
 };
 

@@ -169,7 +169,6 @@ function cleanSubjectLine(subject, tokens) {
  * 2. Only recipient is crm@infogloballink.com
  */
 function isForwardedToCrm(email) {
-    var _a;
     const subject = (email.subject || '').trim();
     const toRecipients = email.to || [];
     // Check if subject starts with "Fw:" (case-insensitive)
@@ -181,7 +180,19 @@ function isForwardedToCrm(email) {
     if (toRecipients.length !== 1) {
         return false;
     }
-    const recipient = (_a = toRecipients[0]) === null || _a === void 0 ? void 0 : _a.toLowerCase().trim();
+    // Handle both string and object recipients
+    let recipientEmail;
+    const firstRecipient = toRecipients[0];
+    if (typeof firstRecipient === 'string') {
+        recipientEmail = firstRecipient;
+    }
+    else if (firstRecipient && typeof firstRecipient === 'object' && firstRecipient.email) {
+        recipientEmail = firstRecipient.email;
+    }
+    else {
+        return false;
+    }
+    const recipient = recipientEmail.toLowerCase().trim();
     if (recipient === 'crm@infogloballink.com') {
         return true;
     }

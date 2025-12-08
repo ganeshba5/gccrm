@@ -399,6 +399,17 @@ async function fetchNewEmails(gmailUserEmail?: string): Promise<{ stored: number
  * Can be called via: https://<region>-<project-id>.cloudfunctions.net/fetchEmails
  */
 export const fetchEmails = functions.https.onRequest(async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
   const timestamp = new Date().toISOString();
   functions.logger.info(`Email fetch HTTP trigger called at ${timestamp}`);
 
