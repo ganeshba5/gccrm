@@ -22,6 +22,8 @@ async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
   try {
     const configKey = `email_parsing.${key}`;
     const configRef = db.collection('configSettings');
+    
+    // First, let's try to find the document
     const globalQuery = await configRef
       .where('key', '==', configKey)
       .where('scope', '==', 'global')
@@ -39,11 +41,28 @@ async function getParsingConfig(key: string, defaultValue: any): Promise<any> {
         value: setting.value,
         valueType: typeof setting.value,
         isArray: Array.isArray(setting.value),
+        documentId: globalQuery.docs[0].id,
       });
       return setting.value;
     }
     
-    functions.logger.warn(`⚠️  getParsingConfig: No setting found for "${configKey}", using fallback`);
+    // Debug: List all email_parsing configs to see what exists
+    functions.logger.warn(`⚠️  getParsingConfig: No setting found for "${configKey}", checking all email_parsing settings...`);
+    try {
+      const allEmailParsingQuery = await configRef
+        .where('key', '>=', 'email_parsing.')
+        .where('key', '<', 'email_parsing.\uf8ff')
+        .where('scope', '==', 'global')
+        .get();
+      
+      functions.logger.info(`📋 Found ${allEmailParsingQuery.size} email_parsing config(s):`);
+      allEmailParsingQuery.docs.forEach(doc => {
+        const data = doc.data();
+        functions.logger.info(`  - Key: "${data.key}", Scope: "${data.scope}", Value: ${JSON.stringify(data.value)}`);
+      });
+    } catch (debugError: any) {
+      functions.logger.warn(`Could not list email_parsing configs for debugging: ${debugError.message}`);
+    }
     
     // Fall back to predefined defaults for known settings
     const predefinedDefaults: Record<string, any> = {

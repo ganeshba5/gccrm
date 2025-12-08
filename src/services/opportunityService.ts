@@ -356,9 +356,15 @@ class OpportunityService {
 
   private convertToOpportunity(doc: DocumentSnapshot): Opportunity {
     const data = doc.data();
+    const rawName = data?.name ?? '';
+    // Ensure name is never empty or equal to ID - use "Unnamed Opportunity" as fallback
+    const name = (rawName && rawName.trim() !== '' && rawName !== doc.id) 
+      ? rawName 
+      : 'Unnamed Opportunity';
+    
     return {
       id: doc.id,
-      name: data?.name ?? '',
+      name: name,
       accountId: data?.accountId,
       amount: data?.amount,
       stage: data?.stage ?? 'New',

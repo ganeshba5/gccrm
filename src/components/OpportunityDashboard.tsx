@@ -25,6 +25,8 @@ export default function OpportunityDashboard() {
   // const [users] = useState<any[]>([]); // Reserved for future use
   const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
   const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
   // selectedOpportunity removed - using opportunityToEdit instead
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -36,6 +38,7 @@ export default function OpportunityDashboard() {
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
+  const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>('all');
   const [dateFilterType, setDateFilterType] = useState<string>(() => {
     const saved = localStorage.getItem('opportunities_dateFilterType');
     // If no saved value, default to current year (first time use)
@@ -106,7 +109,12 @@ export default function OpportunityDashboard() {
 
   const fetchAccounts = async () => {
     try {
-      if (!user) return;
+      if (!user) {
+        setAccountsLoaded(true);
+        return;
+      }
+      
+      setAccountsLoaded(false);
       
       // Get all accounts (not just from opportunities) for the filter dropdown
       const allAccounts = await accountService.getAll();
@@ -135,16 +143,11 @@ export default function OpportunityDashboard() {
         namesMap.set(account.id, account.name);
       });
       
-      // For accounts that couldn't be fetched, keep the accountId as fallback
-      accountIds.forEach(accountId => {
-        if (!namesMap.has(accountId)) {
-          // Will be handled by OpportunityTable which shows accountId as fallback
-        }
-      });
-      
       setAccountNames(namesMap);
+      setAccountsLoaded(true);
     } catch (err: any) {
       console.error('Error fetching accounts:', err);
+      setAccountsLoaded(true);
     }
   };
 
@@ -186,11 +189,24 @@ export default function OpportunityDashboard() {
     try {
       if (!user) {
         console.warn('No user authenticated, cannot fetch opportunities');
+        setLoading(false);
         return;
       }
 
+      setLoading(true);
       const opportunities = await opportunityService.getAll();
-      setOpportunities(opportunities);
+      // Ensure all opportunities have valid names - replace invalid names with "Unnamed Opportunity"
+      // This prevents the ID from appearing even briefly
+      const opportunitiesWithValidNames = opportunities.map(opp => {
+        if (!opp.name || opp.name.trim() === '' || opp.name === opp.id) {
+          return {
+            ...opp,
+            name: 'Unnamed Opportunity'
+          };
+        }
+        return opp;
+      });
+      setOpportunities(opportunitiesWithValidNames);
     } catch (err: any) {
       console.error('Fetch opportunities failed', err);
       if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') {
@@ -199,6 +215,8 @@ export default function OpportunityDashboard() {
       } else {
         console.error('Error fetching opportunities:', err.message || err);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -390,13 +408,20 @@ export default function OpportunityDashboard() {
       }
     }
     
+    // My Opportunities / All Opportunities filter
+    if (opportunityFilter === 'my' && user) {
+      if (opp.owner !== user.id) {
+        return false;
+      }
+    }
+    
     // Stage filter
     if (filterStage !== 'all' && opp.stage !== filterStage) return false;
     
     // Account filter
     if (filterAccount !== 'all' && opp.accountId !== filterAccount) return false;
     
-    // Owner filter
+    // Owner filter (specific owner selection)
     if (filterOwner !== 'all' && opp.owner !== filterOwner) return false;
     
     // Date filter (filter by expectedCloseDate within selected range)
@@ -440,10 +465,38 @@ export default function OpportunityDashboard() {
     return true;
   });
 
+  if (loading || !accountsLoaded) {
+    return <div className="p-4">Loading opportunities...</div>;
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Filters and View Options */}
       <div className="mb-4 space-y-3">
+        {/* My Opportunities / All Opportunities Toggle */}
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setOpportunityFilter('all')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              opportunityFilter === 'all'
+                ? 'bg-brand-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
+          >
+            All Opportunities
+          </button>
+          <button
+            onClick={() => setOpportunityFilter('my')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              opportunityFilter === 'my'
+                ? 'bg-brand-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
+          >
+            My Opportunities
+          </button>
+        </div>
+        
         <div className="flex items-center gap-3 flex-wrap">
           <select 
             value={filterStage}
@@ -643,9 +696,10 @@ export default function OpportunityDashboard() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all' || filterOwner !== 'all') && (
+            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all' || filterOwner !== 'all' || opportunityFilter !== 'all') && (
               <button
                 onClick={() => {
+                  setOpportunityFilter('all');
                   setFilterStage('all');
                   setFilterAccount('all');
                   setAccountSearch('');
