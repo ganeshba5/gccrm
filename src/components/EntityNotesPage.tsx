@@ -219,7 +219,7 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <button

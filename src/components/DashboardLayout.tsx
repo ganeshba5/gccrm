@@ -15,6 +15,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAdminExpanded, setIsAdminExpanded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -145,8 +146,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Fixed Sidebar */}
-      <aside className="fixed left-0 top-0 w-28 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 text-gray-900 flex flex-col h-screen z-99999 shadow-theme-lg">
+      {/* Backdrop overlay for mobile */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-99998 transition-opacity lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Fixed Sidebar - hidden on mobile, overlay on small screens, fixed on desktop */}
+      <aside className={`fixed left-0 top-0 w-28 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 text-gray-900 flex flex-col h-screen z-99999 shadow-theme-lg transform transition-transform duration-300 ease-in-out ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } lg:translate-x-0`}>
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-2 overflow-y-auto custom-scrollbar">
           {/* Main Menu Items */}
@@ -154,14 +166,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <Link
               key={item.path}
               to={item.path}
+              onClick={() => setIsSidebarOpen(false)}
               className={`flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-lg text-center transition-colors ${
                 isActive(item.path) 
                   ? 'bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400' 
                   : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5'
               }`}
             >
-              <span className="text-2xl">{item.icon}</span>
-              <span className="text-xs font-medium leading-tight">{item.label}</span>
+              <span className="text-xl sm:text-2xl">{item.icon}</span>
+              <span className="text-[10px] sm:text-xs font-medium leading-tight break-words text-center">{item.label}</span>
             </Link>
           ))}
 
@@ -176,8 +189,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5'
                 }`}
               >
-                <span className="text-2xl">🔐</span>
-                <span className="text-xs font-medium leading-tight">Admin</span>
+                <span className="text-xl sm:text-2xl">🔐</span>
+                <span className="text-[10px] sm:text-xs font-medium leading-tight break-words text-center">Admin</span>
                 <svg
                   className={`w-3 h-3 transition-transform ${isAdminExpanded ? 'rotate-180' : ''}`}
                   fill="none"
@@ -193,14 +206,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <Link
                       key={item.path}
                       to={item.path}
+                      onClick={() => setIsSidebarOpen(false)}
                       className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg text-center transition-colors ${
                         isActive(item.path) 
                           ? 'bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400' 
                           : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5'
                       }`}
                     >
-                      <span className="text-xl">{item.icon}</span>
-                      <span className="text-xs font-medium leading-tight">{item.label}</span>
+                      <span className="text-lg sm:text-xl">{item.icon}</span>
+                      <span className="text-[10px] sm:text-xs font-medium leading-tight break-words text-center">{item.label}</span>
                     </Link>
                   ))}
                 </div>
@@ -211,18 +225,32 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 ml-28">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-28 w-full">
         {/* Top Bar with fixed page title */}
         <header className="sticky top-0 flex w-full bg-white border-gray-200 z-99999 dark:border-gray-800 dark:bg-gray-900 border-b">
-          <div className="flex items-center justify-between w-full px-4 py-3 lg:px-6 lg:py-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl lg:text-3xl">{getPageMeta().icon}</span>
-              <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="flex items-center justify-between w-full px-3 py-2 sm:px-4 sm:py-3 lg:px-6 lg:py-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Hamburger menu button for mobile */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
+                aria-label="Toggle menu"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {isSidebarOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+              <span className="text-xl sm:text-2xl lg:text-3xl">{getPageMeta().icon}</span>
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
                 {getPageMeta().title}
               </h1>
             </div>
           {/* Right side: primary action + user info */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
             {getPrimaryAction() && (
               <button
                 onClick={() => {
@@ -236,18 +264,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     }
                   }
                 }}
-                className="hidden sm:inline-flex bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-theme-sm transition-colors"
+                className="hidden sm:inline-flex bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium shadow-theme-sm transition-colors whitespace-nowrap"
               >
                 {getPrimaryAction()!.label}
               </button>
             )}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 dark:text-gray-300">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <span className="hidden sm:inline text-xs sm:text-sm text-gray-700 dark:text-gray-300 truncate max-w-[100px] sm:max-w-none">
                 {user?.displayName || user?.email || 'User'}
               </span>
               <button
                 onClick={() => setIsProfileModalOpen(true)}
-                className="p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+                className="p-1.5 sm:p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
                 title="Edit Profile"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,9 +285,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
             <button
               onClick={handleSignOut}
-              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors"
+              className="px-2 py-1.5 sm:px-4 sm:py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
             >
-              Sign Out
+              <span className="hidden sm:inline">Sign Out</span>
+              <span className="sm:hidden">Out</span>
             </button>
           </div>
         </div>

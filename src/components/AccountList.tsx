@@ -231,54 +231,149 @@ export function AccountList() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Industry</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Contact</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredAccounts.map((account) => (
-              <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-6 py-4 whitespace-nowrap text-left">
-                  <button
-                    onClick={() => {
-                      const canEdit = accountEditPermissions.get(account.id);
-                      if (canEdit) {
-                        navigate(`/accounts/${account.id}/edit`);
-                      } else {
-                        navigate(`/accounts/${account.id}/view`);
-                      }
-                    }}
-                    className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline text-left"
-                  >
-                    {account.name}
-                  </button>
-                  {account.email && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400 text-left">{account.email}</div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">{account.industry || '-'}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    account.status === 'active' ? 'bg-success-100 text-success-800 dark:bg-success-900/20 dark:text-success-400' :
-                    account.status === 'inactive' ? 'bg-error-100 text-error-800 dark:bg-error-900/20 dark:text-error-400' :
-                    'bg-warning-100 text-warning-800 dark:bg-warning-900/20 dark:text-warning-400'
-                  }`}>
-                    {account.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+      {/* Mobile/Tablet Card View */}
+      <div className="lg:hidden space-y-4">
+        {filteredAccounts.map((account) => (
+          <div key={account.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <button
+                  onClick={() => {
+                    const canEdit = accountEditPermissions.get(account.id);
+                    if (canEdit) {
+                      navigate(`/accounts/${account.id}/edit`);
+                    } else {
+                      navigate(`/accounts/${account.id}/view`);
+                    }
+                  }}
+                  className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline break-words"
+                >
+                  {account.name}
+                </button>
+                {account.email && (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 break-words mt-1">{account.email}</div>
+                )}
+              </div>
+              <span className={`ml-2 px-2 py-1 text-xs leading-5 font-semibold rounded-full flex-shrink-0 ${
+                account.status === 'active' ? 'bg-success-100 text-success-800 dark:bg-success-900/20 dark:text-success-400' :
+                account.status === 'inactive' ? 'bg-error-100 text-error-800 dark:bg-error-900/20 dark:text-error-400' :
+                'bg-warning-100 text-warning-800 dark:bg-warning-900/20 dark:text-warning-400'
+              }`}>
+                {account.status}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Industry:</span>
+                <div className="text-gray-900 dark:text-white">{account.industry || '-'}</div>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Last Contact:</span>
+                <div className="text-gray-900 dark:text-white">
                   {account.lastContact ? new Date(account.lastContact).toLocaleDateString() : '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                className="p-1.5 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500/10 rounded transition-colors"
+                onClick={() => navigate(`/accounts/${account.id}/notes`)}
+                title="Notes"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </button>
+              <button
+                className="p-1.5 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500/10 rounded transition-colors"
+                onClick={() => navigate(`/accounts/${account.id}/tasks`)}
+                title="Tasks"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </button>
+              {accountEditPermissions.get(account.id) === true && (
+                <button
+                  className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                  onClick={async () => {
+                    if (window.confirm(`Are you sure you want to delete "${account.name}"?`)) {
+                      try {
+                        await accountService.delete(account.id);
+                        loadAccounts();
+                      } catch (err) {
+                        console.error('Error deleting account:', err);
+                        setError('Failed to delete account');
+                      }
+                    }
+                  }}
+                  title="Delete"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {filteredAccounts.length === 0 && (
+          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+            No accounts found
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px]">Name</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[120px]">Industry</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px]">Status</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[120px]">Last Contact</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[120px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredAccounts.map((account) => (
+                <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-4 xl:px-6 py-4 text-left max-w-[200px]">
+                    <button
+                      onClick={() => {
+                        const canEdit = accountEditPermissions.get(account.id);
+                        if (canEdit) {
+                          navigate(`/accounts/${account.id}/edit`);
+                        } else {
+                          navigate(`/accounts/${account.id}/view`);
+                        }
+                      }}
+                      className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline break-words text-left"
+                    >
+                      {account.name}
+                    </button>
+                    {account.email && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400 break-words mt-1 text-left">{account.email}</div>
+                    )}
+                  </td>
+                  <td className="px-4 xl:px-6 py-4 max-w-[150px]">
+                    <div className="text-sm text-gray-900 dark:text-white break-words">{account.industry || '-'}</div>
+                  </td>
+                  <td className="px-4 xl:px-6 py-4">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${
+                      account.status === 'active' ? 'bg-success-100 text-success-800 dark:bg-success-900/20 dark:text-success-400' :
+                      account.status === 'inactive' ? 'bg-error-100 text-error-800 dark:bg-error-900/20 dark:text-error-400' :
+                      'bg-warning-100 text-warning-800 dark:bg-warning-900/20 dark:text-warning-400'
+                    }`}>
+                      {account.status}
+                    </span>
+                  </td>
+                  <td className="px-4 xl:px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {account.lastContact ? new Date(account.lastContact).toLocaleDateString() : '-'}
+                  </td>
+                  <td className="px-4 xl:px-6 py-4 text-left text-sm font-medium">
                   <div className="flex items-center gap-2">
                     <button
                       className="p-1.5 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500/10 rounded transition-colors"
@@ -298,7 +393,6 @@ export function AccountList() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                       </svg>
                     </button>
-                    {/* Delete button - only show if user can edit */}
                     {accountEditPermissions.get(account.id) === true && (
                       <button
                         className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
@@ -326,7 +420,8 @@ export function AccountList() {
             ))}
           </tbody>
         </table>
-        {accounts.length === 0 && (
+        </div>
+        {filteredAccounts.length === 0 && (
           <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
             No accounts found
           </div>

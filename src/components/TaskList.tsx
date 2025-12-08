@@ -103,7 +103,7 @@ export function TaskList() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-6">
       <div className="flex gap-3 mb-4">
         <select
           value={filterStatus}
@@ -139,48 +139,124 @@ export function TaskList() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Title</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Priority</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Due Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Assigned To</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredTasks.map((task) => (
-              <tr key={task.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    {task.title}
+      {/* Mobile/Tablet Card View */}
+      <div className="lg:hidden space-y-4">
+        {filteredTasks.map((task) => (
+          <div key={task.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900 dark:text-white break-words">
+                  {task.title}
+                </div>
+                {task.description && (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 break-words mt-1">
+                    {task.description}
                   </div>
-                  {task.description && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
-                      {task.description}
+                )}
+              </div>
+              <span className={`ml-2 px-2 py-1 text-xs leading-5 font-semibold rounded-full flex-shrink-0 ${getStatusColor(task.status)}`}>
+                {task.status.replace('_', ' ')}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Priority:</span>
+                <div className={`font-medium ${getPriorityColor(task.priority)}`}>
+                  {task.priority}
+                </div>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Due Date:</span>
+                <div className="text-gray-900 dark:text-white">{formatDate(task.dueDate)}</div>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Assigned To:</span>
+                <div className="text-gray-900 dark:text-white">{getUserName(task.assignedTo || '')}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                onClick={() => navigate(`/tasks/${task.id}/edit`)}
+                title="Edit"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                onClick={async () => {
+                  if (window.confirm(`Are you sure you want to delete "${task.title}"?`)) {
+                    try {
+                      await taskService.delete(task.id);
+                      loadTasks();
+                    } catch (err) {
+                      console.error('Error deleting task:', err);
+                      setError('Failed to delete task');
+                    }
+                  }
+                }}
+                title="Delete"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+        {filteredTasks.length === 0 && (
+          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+            No tasks found
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px]">Title</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px]">Status</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[100px]">Priority</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[110px]">Due Date</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[120px]">Assigned To</th>
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[120px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredTasks.map((task) => (
+                <tr key={task.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-4 xl:px-6 py-4 max-w-[200px]">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white break-words">
+                      {task.title}
                     </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                    {task.status.replace('_', ' ')}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`text-sm font-medium ${getPriorityColor(task.priority)}`}>
-                    {task.priority}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {formatDate(task.dueDate)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {getUserName(task.assignedTo || '')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
+                    {task.description && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400 break-words mt-1">
+                        {task.description}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 xl:px-6 py-4">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${getStatusColor(task.status)}`}>
+                      {task.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 xl:px-6 py-4">
+                    <span className={`text-sm font-medium whitespace-nowrap ${getPriorityColor(task.priority)}`}>
+                      {task.priority}
+                    </span>
+                  </td>
+                  <td className="px-4 xl:px-6 py-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {formatDate(task.dueDate)}
+                  </td>
+                  <td className="px-4 xl:px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-[120px]">
+                    <div className="break-words">{getUserName(task.assignedTo || '')}</div>
+                  </td>
+                  <td className="px-4 xl:px-6 py-4 text-left text-sm font-medium">
                   <div className="flex items-center gap-2">
                     <button
                       className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
@@ -216,6 +292,7 @@ export function TaskList() {
             ))}
           </tbody>
         </table>
+        </div>
         {filteredTasks.length === 0 && (
           <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
             No tasks found
