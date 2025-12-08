@@ -160,23 +160,8 @@ async function deleteFromCollection(
   whereCondition: WhereCondition | null,
   limit: number,
   dryRun: boolean
-): Promise<{ count: number; preview: any[] }> {
+): Promise<{ count: number; preview: any[]; docs?: admin.firestore.QueryDocumentSnapshot[] }> {
   const collectionRef = db.collection(collectionName);
-  
-  // Build query with date range
-  let query: admin.firestore.Query = collectionRef
-    .where('createdAt', '>=', Timestamp.fromDate(fromDate))
-    .where('createdAt', '<=', Timestamp.fromDate(toDate));
-  
-  // Add additional where condition if provided
-  if (whereCondition) {
-    query = query.where(whereCondition.field, whereCondition.operator, whereCondition.value);
-  }
-  
-  // Add limit
-  if (limit > 0) {
-    query = query.limit(limit);
-  }
   
   console.log(`\n🔍 Querying ${collectionName}...`);
   console.log(`   Date range: ${fromDate.toISOString()} to ${toDate.toISOString()}`);
@@ -184,17 +169,90 @@ async function deleteFromCollection(
     console.log(`   Additional condition: ${whereCondition.field} ${whereCondition.operator} ${JSON.stringify(whereCondition.value)}`);
   }
   
-  const snapshot = await query.get();
+  let snapshot: admin.firestore.QuerySnapshot;
+  let docs: admin.firestore.QueryDocumentSnapshot[] = [];
   
-  if (snapshot.empty) {
+  // Try query with all conditions first
+  try {
+    let query: admin.firestore.Query = collectionRef
+      .where('createdAt', '>=', Timestamp.fromDate(fromDate))
+      .where('createdAt', '<=', Timestamp.fromDate(toDate));
+    
+    // Add additional where condition if provided
+    if (whereCondition) {
+      query = query.where(whereCondition.field, whereCondition.operator, whereCondition.value);
+    }
+    
+    // Add limit
+    if (limit > 0) {
+      query = query.limit(limit);
+    }
+    
+    snapshot = await query.get();
+    docs = snapshot.docs;
+  } catch (error: any) {
+    // If query fails due to missing index, fall back to filtering in memory
+    if (error.message && error.message.includes('index')) {
+      console.log(`   ⚠️  Query requires composite index. Falling back to in-memory filtering...`);
+      
+      try {
+        // Query without the additional where condition
+        let query: admin.firestore.Query = collectionRef
+          .where('createdAt', '>=', Timestamp.fromDate(fromDate))
+          .where('createdAt', '<=', Timestamp.fromDate(toDate));
+        
+        // Get all documents in date range (may be large, but avoids index requirement)
+        snapshot = await query.get();
+        docs = snapshot.docs;
+        
+        // Filter in memory by the where condition
+        if (whereCondition) {
+          docs = docs.filter(doc => {
+            const data = doc.data();
+            const fieldValue = data[whereCondition.field];
+            
+            switch (whereCondition.operator) {
+              case '==':
+                return fieldValue === whereCondition.value;
+              case '!=':
+                return fieldValue !== whereCondition.value;
+              case '<':
+                return fieldValue < whereCondition.value;
+              case '<=':
+                return fieldValue <= whereCondition.value;
+              case '>':
+                return fieldValue > whereCondition.value;
+              case '>=':
+                return fieldValue >= whereCondition.value;
+              default:
+                return false;
+            }
+          });
+          
+          // Apply limit after filtering
+          if (limit > 0 && docs.length > limit) {
+            docs = docs.slice(0, limit);
+          }
+        }
+      } catch (fallbackError: any) {
+        console.error(`   ❌ Error with fallback query: ${fallbackError.message}`);
+        throw fallbackError;
+      }
+    } else {
+      // Re-throw if it's not an index error
+      throw error;
+    }
+  }
+  
+  if (docs.length === 0) {
     console.log(`   ✅ No documents found in ${collectionName}`);
     return { count: 0, preview: [] };
   }
   
-  console.log(`   📋 Found ${snapshot.size} document(s) to ${dryRun ? 'show' : 'delete'}`);
+  console.log(`   📋 Found ${docs.length} document(s) to ${dryRun ? 'show' : 'delete'}`);
   
   // Preview first 5 documents
-  const preview = snapshot.docs.slice(0, 5).map(doc => {
+  const preview = docs.slice(0, 5).map(doc => {
     const data = doc.data();
     return {
       id: doc.id,
@@ -206,7 +264,18 @@ async function deleteFromCollection(
     };
   });
   
-  return { count: snapshot.size, preview };
+  // Return docs array for deletion later (only if we need it for in-memory filtering)
+  const result: { count: number; preview: any[]; docs?: admin.firestore.QueryDocumentSnapshot[] } = {
+    count: docs.length,
+    preview,
+  };
+  
+  // Store docs if we did in-memory filtering (so we don't need to re-query)
+  if (whereCondition) {
+    result.docs = docs;
+  }
+  
+  return result;
 }
 
 async function deleteDocuments() {
@@ -243,7 +312,7 @@ async function deleteDocuments() {
     collections = collections.map(c => COLLECTION_ALIASES[c] || c);
     
     // Remove duplicates
-    collections = [...new Set(collections)];
+    collections = Array.from(new Set(collections));
     
     // Validate collections
     const invalid = collections.filter(c => !VALID_COLLECTIONS.includes(c));
@@ -277,7 +346,7 @@ async function deleteDocuments() {
   console.log('='.repeat(60));
   
   // Query all collections
-  const results: Record<string, { count: number; preview: any[] }> = {};
+  const results: Record<string, { count: number; preview: any[]; docs?: admin.firestore.QueryDocumentSnapshot[] }> = {};
   let totalCount = 0;
   
   for (const collectionName of collections) {
@@ -369,26 +438,34 @@ async function deleteDocuments() {
     if (result.count === 0) continue;
     
     try {
-      const collectionRef = db.collection(collectionName);
+      // Use the docs array from the query result if available (for in-memory filtered results)
+      // Otherwise, rebuild the query
+      let docs: admin.firestore.QueryDocumentSnapshot[];
       
-      // Rebuild query
-      let query: admin.firestore.Query = collectionRef
-        .where('createdAt', '>=', Timestamp.fromDate(fromDate))
-        .where('createdAt', '<=', Timestamp.fromDate(toDate));
-      
-      if (whereCondition) {
-        query = query.where(whereCondition.field, whereCondition.operator, whereCondition.value);
+      if (result.docs && result.docs.length > 0) {
+        // Use pre-filtered docs from query
+        docs = result.docs;
+      } else {
+        // Rebuild query (should work if no index was needed)
+        const collectionRef = db.collection(collectionName);
+        let query: admin.firestore.Query = collectionRef
+          .where('createdAt', '>=', Timestamp.fromDate(fromDate))
+          .where('createdAt', '<=', Timestamp.fromDate(toDate));
+        
+        if (whereCondition) {
+          query = query.where(whereCondition.field, whereCondition.operator, whereCondition.value);
+        }
+        
+        if (limit > 0) {
+          query = query.limit(limit);
+        }
+        
+        const snapshot = await query.get();
+        docs = snapshot.docs;
       }
-      
-      if (limit > 0) {
-        query = query.limit(limit);
-      }
-      
-      const snapshot = await query.get();
       
       // Delete in batches (Firestore batch limit is 500)
       const batchSize = 500;
-      const docs = snapshot.docs;
       
       for (let i = 0; i < docs.length; i += batchSize) {
         const batch = db.batch();
