@@ -250,7 +250,7 @@ export function TaskForm() {
 
   return (
     <div className="p-6">
-      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+      <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white text-left">
             {id ? 'Edit Task' : 'New Task'}

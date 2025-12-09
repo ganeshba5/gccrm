@@ -385,7 +385,7 @@ export function ContactForm() {
 
   return (
     <div className="p-6">
-      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+      <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
             {id ? 'Edit Contact' : 'New Contact'}

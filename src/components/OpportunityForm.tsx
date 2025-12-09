@@ -497,7 +497,7 @@ export default function OpportunityForm() {
 
   return (
     <div className="p-6">
-      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+      <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <button
@@ -558,39 +558,39 @@ export default function OpportunityForm() {
         )}
 
         <form id="edit-opportunity-form" onSubmit={handleSubmit} className="space-y-4">
-          {/* Opportunity Name: Label and Field in 1 line */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-              Opportunity Name *
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
-              required 
-              disabled={loading}
-            />
-          </div>
-
-          {/* Account: Label and Field in 1 line */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="account" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-              Account:
-            </label>
-            <input 
-              id="account"
-              value={accountName || accountId || ''} 
-              readOnly
-              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-700" 
-              disabled={true}
-              placeholder={accountId ? 'Loading account name...' : 'No account'}
-            />
-          </div>
-
-          {/* Amount, Stage: Labels and fields spread out */}
+          {/* First row: Opportunity Name, Account */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Opportunity Name *
+              </label>
+              <input
+                type="text"
+                id="name"
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
+                required 
+                disabled={loading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="account" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Account:
+              </label>
+              <input 
+                id="account"
+                value={accountName || accountId || ''} 
+                readOnly
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-700" 
+                disabled={true}
+                placeholder={accountId ? 'Loading account name...' : 'No account'}
+              />
+            </div>
+          </div>
+
+          {/* Second row: Amount, Stage, Probability, Close Date */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="flex items-center gap-2">
               <label htmlFor="amount" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Amount:
@@ -625,10 +625,6 @@ export default function OpportunityForm() {
                 <option value="Closed Lost">Closed Lost</option>
               </select>
             </div>
-          </div>
-
-          {/* Probability, Close Date: Labels and fields spread out */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-2">
               <label htmlFor="probability" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Probability (%):
@@ -658,7 +654,7 @@ export default function OpportunityForm() {
             </div>
           </div>
 
-          {/* Description: Label left aligned */}
+          {/* Description: Reduced height */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left mb-1">
               Description
@@ -668,7 +664,7 @@ export default function OpportunityForm() {
               value={description} 
               onChange={e => setDescription(e.target.value)} 
               className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
-              rows={6}
+              rows={3}
               disabled={loading}
             />
           </div>

@@ -83,8 +83,8 @@ export function CustomerForm() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-6">
+    <div className="p-6">
+      <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <h2 className="text-2xl font-semibold mb-6">
           {id ? 'Edit Customer' : 'New Customer'}
         </h2>

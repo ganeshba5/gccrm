@@ -503,7 +503,7 @@ export function AccountForm() {
         </div>
       )}
       <div className="p-6">
-      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+      <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <button
@@ -572,25 +572,23 @@ export function AccountForm() {
         )}
 
         <form id="account-form" onSubmit={handleSubmit} className="space-y-4">
-          {/* Account Name: Label and Field in 1 line */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-              Account Name *
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-              disabled={isReadOnly}
-              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          {/* Email, Phone: Label and Field in 1 line */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* First row: Account Name, Email, Phone */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Account Name *
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+                disabled={isReadOnly}
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+              />
+            </div>
             <div className="flex items-center gap-2">
               <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Email:
@@ -605,7 +603,6 @@ export function AccountForm() {
                 className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
-
             <div className="flex items-center gap-2">
               <label htmlFor="phone" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Phone:
@@ -622,8 +619,8 @@ export function AccountForm() {
             </div>
           </div>
 
-          {/* Website, Industry: Labels and fields spread out */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Second row: Website, Industry, Status */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center gap-2">
               <label htmlFor="website" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Website:
@@ -638,7 +635,6 @@ export function AccountForm() {
                 className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
-
             <div className="flex items-center gap-2">
               <label htmlFor="industry" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 Industry:
@@ -653,28 +649,26 @@ export function AccountForm() {
                 className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
               />
             </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Status:
+              </label>
+              <select
+                id="status"
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                disabled={isReadOnly}
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+              >
+                <option value="prospect">Prospect</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
 
-          {/* Status: Label and Field in 1 line above Description */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-              Status:
-            </label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              disabled={isReadOnly}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed min-w-[120px]"
-            >
-              <option value="prospect">Prospect</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          {/* Description: Label left aligned */}
+          {/* Description: Reduced height */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left mb-1">
               Description
@@ -684,7 +678,7 @@ export function AccountForm() {
               name="description"
               value={formData.description || ''}
               onChange={handleInputChange}
-              rows={6}
+              rows={3}
               disabled={isReadOnly}
               className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
             />
