@@ -45,7 +45,6 @@ export default function OpportunityForm() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [viewingNoteId, setViewingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editNoteAttachments, setEditNoteAttachments] = useState<NoteAttachment[]>([]);
   const [editIsPrivate, setEditIsPrivate] = useState(false);
@@ -270,17 +269,13 @@ export default function OpportunityForm() {
   };
 
   const handleViewNote = (note: Note) => {
-    setViewingNoteId(note.id);
-    setEditNoteContent(note.content);
-    setEditNoteAttachments(note.attachments || []);
-    setEditIsPrivate(note.isPrivate || false);
-  };
-
-  const handleCloseView = () => {
-    setViewingNoteId(null);
-    setEditNoteContent('');
-    setEditNoteAttachments([]);
-    setEditIsPrivate(false);
+    if (id) {
+      navigate(`/notes/${note.id}/view`, { 
+        state: { returnPath: `/opportunities/${id}/edit` } 
+      });
+    } else {
+      navigate(`/notes/${note.id}/view`);
+    }
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -805,8 +800,6 @@ export default function OpportunityForm() {
               {notes.map((note) => {
                 const isExpanded = expandedNotes.has(note.id);
                 const isEditing = editingNoteId === note.id;
-                const isViewing = viewingNoteId === note.id;
-                
                 if (isEditing) {
                   return (
                     <div key={note.id} className="p-4 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500 rounded-lg">
@@ -848,44 +841,6 @@ export default function OpportunityForm() {
                           </div>
                         </div>
                       </form>
-                    </div>
-                  );
-                }
-
-                if (isViewing) {
-                  return (
-                    <div key={note.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 border-l-4 border-gray-400 dark:border-gray-600 rounded-lg">
-                      <div className="space-y-3">
-                        <RichTextEditor
-                          value={editNoteContent}
-                          onChange={() => {}} // No-op in read-only mode
-                          attachments={editNoteAttachments}
-                          onAttachmentsChange={() => {}} // No-op in read-only mode
-                          placeholder=""
-                          readOnly={true}
-                        />
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              id={`view-isPrivate-${note.id}`}
-                              checked={editIsPrivate}
-                              disabled={true}
-                              className="h-4 w-4 text-brand-500 focus:ring-brand-500 border-gray-300 rounded disabled:opacity-50"
-                            />
-                            <label htmlFor={`view-isPrivate-${note.id}`} className="text-sm text-gray-700 dark:text-gray-300">
-                              Private
-                            </label>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleCloseView}
-                            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
-                          >
-                            Close
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   );
                 }

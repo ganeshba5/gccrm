@@ -17,6 +17,7 @@ import { TaskList } from './components/TaskList';
 import { TaskForm } from './components/TaskForm';
 import { NoteList } from './components/NoteList';
 import { NoteForm } from './components/NoteForm';
+import { NoteView } from './components/NoteView';
 import { UserList } from './components/UserList';
 import { UserForm } from './components/UserForm';
 import { CustomerList } from './components/CustomerList';
@@ -194,6 +195,16 @@ export default function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <NoteForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notes/:id/view"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <NoteView />
                 </DashboardLayout>
               </ProtectedRoute>
             }
