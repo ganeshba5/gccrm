@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import type { NoteFormData, NoteAttachment } from '../types/note';
 import { noteService } from '../services/noteService';
 import { accountService } from '../services/accountService';
@@ -22,6 +22,7 @@ const initialFormData: NoteFormData = {
 export function NoteForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [formData, setFormData] = useState<NoteFormData>(initialFormData);
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
@@ -122,7 +123,14 @@ export function NoteForm() {
       } else {
         await noteService.create(submitData, user.id);
       }
-      navigate('/notes');
+      
+      // Navigate back to the return path if provided, otherwise to notes list
+      const state = location.state as { returnPath?: string } | null;
+      if (state?.returnPath) {
+        navigate(state.returnPath);
+      } else {
+        navigate('/notes');
+      }
     } catch (err) {
       setError('Failed to save note');
       console.error('Error saving note:', err);
@@ -164,12 +172,29 @@ export function NoteForm() {
     return <div className="p-4">Loading note data...</div>;
   }
 
+  const getBackPath = (): string => {
+    const state = location.state as { returnPath?: string } | null;
+    if (state?.returnPath) {
+      return state.returnPath;
+    }
+    return '/notes';
+  };
+
   return (
     <div className="p-6">
       <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-        <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">
-          {id ? 'Edit Note' : 'New Note'}
-        </h2>
+        {/* Header with back button */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={() => navigate(getBackPath())}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            ← Back
+          </button>
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+            {id ? 'Edit Note' : 'New Note'}
+          </h2>
+        </div>
 
         {error && (
           <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg text-error-700 text-sm dark:bg-error-900/20 dark:border-error-800 dark:text-error-400">
@@ -267,7 +292,7 @@ export function NoteForm() {
           <div className="flex justify-end space-x-4">
             <button
               type="button"
-              onClick={() => navigate('/notes')}
+              onClick={() => navigate(getBackPath())}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cancel

@@ -26,12 +26,21 @@ export default function OpportunityDashboard() {
   const [loading, setLoading] = useState(true);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [filterStage, setFilterStage] = useState<string>('all');
-  const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [filterStage, setFilterStage] = useState<string>(() => {
+    return searchParams.get('stage') || 'all';
+  });
+  const [filterOwner, setFilterOwner] = useState<string>(() => {
+    return searchParams.get('owner') || 'all';
+  });
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
-  const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>('my');
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>(() => {
+    const filter = searchParams.get('filter');
+    return (filter === 'my' || filter === 'all') ? filter : 'my';
+  });
+  const [searchTerm, setSearchTerm] = useState<string>(() => {
+    return searchParams.get('search') || '';
+  });
   const [opportunityNotes, setOpportunityNotes] = useState<Map<string, string>>(new Map());
   const [notesLoading, setNotesLoading] = useState(false);
   const [dateFilterType, setDateFilterType] = useState<string>(() => {
@@ -71,6 +80,19 @@ export default function OpportunityDashboard() {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // Restore date filter state from URL params when component loads
+  useEffect(() => {
+    const dateType = searchParams.get('dateType');
+    const dateValue = searchParams.get('dateValue');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    if (dateType) setDateFilterType(dateType);
+    if (dateValue) setDateFilterValue(dateValue);
+    if (startDate) setCustomStartDate(startDate);
+    if (endDate) setCustomEndDate(endDate);
+  }, []); // Only run on mount
 
   // No longer needed - edit is now handled by route
 
@@ -230,7 +252,22 @@ export default function OpportunityDashboard() {
 
   const handleEdit = (opportunity: Opportunity) => {
     if (opportunity.id) {
-      navigate(`/opportunities/${opportunity.id}/edit`);
+      // Build URL with current filter/search state
+      const params = new URLSearchParams();
+      // Always include filter to preserve selection (including 'all')
+      params.set('filter', opportunityFilter);
+      if (filterStage !== 'all') params.set('stage', filterStage);
+      if (filterOwner !== 'all') params.set('owner', filterOwner);
+      if (searchTerm) params.set('search', searchTerm);
+      if (dateFilterType) params.set('dateType', dateFilterType);
+      if (dateFilterValue) params.set('dateValue', dateFilterValue);
+      if (customStartDate) params.set('startDate', customStartDate);
+      if (customEndDate) params.set('endDate', customEndDate);
+      
+      const queryString = params.toString();
+      navigate(`/opportunities/${opportunity.id}/edit${queryString ? `?${queryString}` : ''}`, {
+        state: { returnPath: `/opportunities${queryString ? `?${queryString}` : ''}` }
+      });
     }
   };
 

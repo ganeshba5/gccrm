@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Account } from '../types/account';
 import type { Opportunity } from '../types/opportunity';
 import { accountService } from '../services/accountService';
@@ -11,23 +11,30 @@ import { canAccessAllData } from '../lib/auth-helpers';
 
 export function AccountList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accountEditPermissions, setAccountEditPermissions] = useState<Map<string, boolean>>(new Map());
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>(() => {
+    return searchParams.get('search') || '';
+  });
   const [accountNotes, setAccountNotes] = useState<Map<string, string>>(new Map());
   const [notesLoading, setNotesLoading] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [viewHistoryFrom, setViewHistoryFrom] = useState<Date | null>(null);
-  const [accountFilter, setAccountFilter] = useState<'all' | 'my'>('my');
+  const [accountFilter, setAccountFilter] = useState<'all' | 'my'>(() => {
+    const filter = searchParams.get('filter');
+    return (filter === 'my' || filter === 'all') ? filter : 'my';
+  });
 
   useEffect(() => {
     loadAccounts();
     loadOpportunities();
     loadViewHistoryFrom();
   }, []);
+
 
   // Load notes for accounts when search term is present
   useEffect(() => {
@@ -249,11 +256,17 @@ export function AccountList() {
                 <button
                   onClick={() => {
                     const canEdit = accountEditPermissions.get(account.id);
-                    if (canEdit) {
-                      navigate(`/accounts/${account.id}/edit`);
-                    } else {
-                      navigate(`/accounts/${account.id}/view`);
-                    }
+                    // Build URL with current filter/search state
+                    const params = new URLSearchParams();
+                    // Always include filter to preserve selection (including 'all')
+                    params.set('filter', accountFilter);
+                    if (searchTerm) params.set('search', searchTerm);
+                    
+                    const queryString = params.toString();
+                    const basePath = canEdit ? `/accounts/${account.id}/edit` : `/accounts/${account.id}/view`;
+                    navigate(`${basePath}${queryString ? `?${queryString}` : ''}`, {
+                      state: { returnPath: `/accounts${queryString ? `?${queryString}` : ''}` }
+                    });
                   }}
                   className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline break-words"
                 >
@@ -353,11 +366,16 @@ export function AccountList() {
                     <button
                       onClick={() => {
                         const canEdit = accountEditPermissions.get(account.id);
-                        if (canEdit) {
-                          navigate(`/accounts/${account.id}/edit`);
-                        } else {
-                          navigate(`/accounts/${account.id}/view`);
-                        }
+                        // Build URL with current filter/search state
+                        const params = new URLSearchParams();
+                        if (accountFilter !== 'my') params.set('filter', accountFilter);
+                        if (searchTerm) params.set('search', searchTerm);
+                        
+                        const queryString = params.toString();
+                        const basePath = canEdit ? `/accounts/${account.id}/edit` : `/accounts/${account.id}/view`;
+                        navigate(`${basePath}${queryString ? `?${queryString}` : ''}`, {
+                          state: { returnPath: `/accounts${queryString ? `?${queryString}` : ''}` }
+                        });
                       }}
                       className="text-sm font-medium text-brand-500 hover:text-brand-600 hover:underline break-words text-left"
                     >

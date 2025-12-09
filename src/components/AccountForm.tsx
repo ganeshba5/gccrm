@@ -59,10 +59,6 @@ export function AccountForm() {
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [editNoteContent, setEditNoteContent] = useState('');
-  const [editNoteAttachments, setEditNoteAttachments] = useState<NoteAttachment[]>([]);
-  const [editIsPrivate, setEditIsPrivate] = useState(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [isCreatingContact, setIsCreatingContact] = useState(false);
@@ -217,7 +213,13 @@ export function AccountForm() {
       } else {
         await accountService.create(submitData, user.id);
       }
-      navigate('/accounts');
+      // Preserve query params from URL or location state
+      const state = location.state as { returnPath?: string } | null;
+      const returnPath = state?.returnPath || (() => {
+        const queryString = new URLSearchParams(location.search).toString();
+        return `/accounts${queryString ? `?${queryString}` : ''}`;
+      })();
+      navigate(returnPath);
     } catch (err) {
       setError('Failed to save account');
       console.error('Error saving account:', err);
@@ -330,42 +332,16 @@ export function AccountForm() {
   };
 
   const handleEditNote = (note: Note) => {
-    setEditingNoteId(note.id);
-    setEditNoteContent(note.content);
-    setEditNoteAttachments(note.attachments || []);
-    setEditIsPrivate(note.isPrivate || false);
-  };
-
-  const handleUpdateNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // Check if content has meaningful text (strip HTML tags for validation)
-    const textContent = editNoteContent.replace(/<[^>]*>/g, '').trim();
-    if (!editingNoteId || (!textContent && editNoteAttachments.length === 0) || !user) return;
-
-    try {
-      setError(null);
-      await noteService.update(editingNoteId, {
-        content: editNoteContent,
-        attachments: editNoteAttachments.length > 0 ? editNoteAttachments : undefined,
-        isPrivate: editIsPrivate,
+    // Navigate to full-page edit mode
+    if (id) {
+      navigate(`/notes/${note.id}/edit`, { 
+        state: { returnPath: `/accounts/${id}/edit` } 
       });
-      setEditingNoteId(null);
-      setEditNoteContent('');
-      setEditNoteAttachments([]);
-      setEditIsPrivate(false);
-      await loadNotes(id!);
-    } catch (err) {
-      setError('Failed to update note');
-      console.error('Error updating note:', err);
+    } else {
+      navigate(`/notes/${note.id}/edit`);
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingNoteId(null);
-    setEditNoteContent('');
-    setEditNoteAttachments([]);
-    setEditIsPrivate(false);
-  };
 
   const handleViewNote = (note: Note) => {
     const accountId = id || '';
@@ -500,7 +476,14 @@ export function AccountForm() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/accounts')}
+              onClick={() => {
+                const state = location.state as { returnPath?: string } | null;
+                const returnPath = state?.returnPath || (() => {
+                  const queryString = new URLSearchParams(location.search).toString();
+                  return `/accounts${queryString ? `?${queryString}` : ''}`;
+                })();
+                navigate(returnPath);
+              }}
               className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
               title="Back to Accounts"
             >
@@ -528,7 +511,14 @@ export function AccountForm() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate('/accounts')}
+                onClick={() => {
+                const state = location.state as { returnPath?: string } | null;
+                const returnPath = state?.returnPath || (() => {
+                  const queryString = new URLSearchParams(location.search).toString();
+                  return `/accounts${queryString ? `?${queryString}` : ''}`;
+                })();
+                navigate(returnPath);
+              }}
                 className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
                 title="Cancel"
               >
@@ -820,51 +810,6 @@ export function AccountForm() {
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {notes.map((note) => {
                   const isExpanded = expandedNotes.has(note.id);
-                  const isEditing = editingNoteId === note.id;
-                  if (isEditing) {
-                    return (
-                      <div key={note.id} className="p-4 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500 rounded-lg">
-                        <form onSubmit={handleUpdateNote} className="space-y-3">
-                          <RichTextEditor
-                            value={editNoteContent}
-                            onChange={setEditNoteContent}
-                            attachments={editNoteAttachments}
-                            onAttachmentsChange={setEditNoteAttachments}
-                            placeholder="Enter your note here..."
-                          />
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                id={`edit-isPrivate-${note.id}`}
-                                checked={editIsPrivate}
-                                onChange={(e) => setEditIsPrivate(e.target.checked)}
-                                className="h-4 w-4 text-brand-500 focus:ring-brand-500 border-gray-300 rounded"
-                              />
-                              <label htmlFor={`edit-isPrivate-${note.id}`} className="text-sm text-gray-700 dark:text-gray-300">
-                                Private
-                              </label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={handleCancelEdit}
-                                className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </div>
-                        </form>
-                      </div>
-                    );
-                  }
 
                   return (
                     <div key={note.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">

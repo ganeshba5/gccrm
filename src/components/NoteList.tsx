@@ -279,7 +279,9 @@ export function NoteList() {
                 <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                   <button
                     className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
-                    onClick={() => navigate(`/notes/${note.id}/edit`)}
+                    onClick={() => navigate(`/notes/${note.id}/edit`, { 
+                      state: { returnPath: '/notes' } 
+                    })}
                     title="Edit"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -395,7 +397,9 @@ export function NoteList() {
                       <div className="col-span-1 flex items-center justify-end gap-1">
                       <button
                         className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
-                        onClick={() => navigate(`/notes/${note.id}/edit`)}
+                        onClick={() => navigate(`/notes/${note.id}/edit`, { 
+                      state: { returnPath: '/notes' } 
+                    })}
                         title="Edit"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
