@@ -156,14 +156,23 @@ function isForwardedToCrm(email: any): boolean {
   const subject = (email.subject || '').trim();
   const toRecipients = email.to || [];
   
+  functions.logger.info(`🔍 Checking if forwarded to CRM:`, {
+    subject: subject,
+    subjectLower: subject.toLowerCase(),
+    toRecipientsCount: toRecipients.length,
+    toRecipients: toRecipients,
+  });
+  
   // Check if subject starts with "Fw:" (case-insensitive)
   const subjectLower = subject.toLowerCase();
   if (!subjectLower.startsWith('fw:')) {
+    functions.logger.info(`   ❌ Subject does not start with "Fw:"`);
     return false;
   }
   
   // Check if only recipient is crm@infogloballink.com
   if (toRecipients.length !== 1) {
+    functions.logger.info(`   ❌ Not exactly 1 recipient (found ${toRecipients.length})`);
     return false;
   }
   
@@ -175,28 +184,66 @@ function isForwardedToCrm(email: any): boolean {
   } else if (firstRecipient && typeof firstRecipient === 'object' && firstRecipient.email) {
     recipientEmail = firstRecipient.email;
   } else {
+    functions.logger.info(`   ❌ Could not extract recipient email from:`, firstRecipient);
     return false;
   }
   
   const recipient = recipientEmail.toLowerCase().trim();
+  functions.logger.info(`   🔍 Checking recipient: "${recipient}" against CRM email patterns`);
+  
+  // Check for various CRM email formats
+  const crmEmailPatterns = [
+    'crm@infogloballink.com',
+    'crm@infogloballink',
+    'crm.infogloballink.com',
+    'crm',
+  ];
+  
+  // Check exact match first
   if (recipient === 'crm@infogloballink.com') {
+    functions.logger.info(`   ✅ Forwarded email to CRM detected! (exact match)`);
     return true;
   }
   
+  // Check if recipient contains "crm" and is from infogloballink domain
+  if (recipient.includes('crm') && recipient.includes('infogloballink')) {
+    functions.logger.info(`   ✅ Forwarded email to CRM detected! (pattern match)`);
+    return true;
+  }
+  
+  // Check if recipient is just "crm" (might be stored without domain)
+  if (recipient === 'crm') {
+    functions.logger.info(`   ✅ Forwarded email to CRM detected! (crm only)`);
+    return true;
+  }
+  
+  functions.logger.info(`   ❌ Recipient "${recipient}" does not match any CRM email pattern`);
   return false;
 }
 
 /**
  * Extract original From and To from forwarded email content
+ * Also extracts the original email body/content (without forwarding wrapper)
  * Looks for patterns like:
  * - "From: name <email@domain.com>"
  * - "To: email@domain.com"
  * - "-----Original Message-----" followed by From/To headers
  */
-function extractForwardedEmailInfo(content: string): { from?: { email: string; name?: string }; to?: string[] } | null {
-  if (!content) return null;
+function extractForwardedEmailInfo(content: string): { 
+  from?: { email: string; name?: string }; 
+  to?: string[]; 
+  originalContent?: string;
+} | null {
+  if (!content) {
+    functions.logger.warn(`   ⚠️  No content provided to extractForwardedEmailInfo`);
+    return null;
+  }
   
-  const result: { from?: { email: string; name?: string }; to?: string[] } = {};
+  functions.logger.info(`   🔍 Extracting forwarded email info from content (first 500 chars):`, {
+    contentPreview: content.substring(0, 500),
+  });
+  
+  const result: { from?: { email: string; name?: string }; to?: string[]; originalContent?: string } = {};
   
   // Try to find forwarded email headers
   // Look for patterns like "From:", "To:" in the content
@@ -209,24 +256,45 @@ function extractForwardedEmailInfo(content: string): { from?: { email: string; n
   const separators = [
     /-----Original Message-----/i,
     /-----Forwarded Message-----/i,
-    /From:/i,
+    /From:\s/i,
     /^On .* wrote:/m,
   ];
   
   let forwardedSection = content;
+  let separatorFound = false;
   for (const separator of separators) {
     const match = content.match(separator);
     if (match && match.index !== undefined) {
       // Extract content after the separator
       forwardedSection = content.substring(match.index);
+      separatorFound = true;
+      functions.logger.info(`   ✅ Found separator at index ${match.index}: ${separator.toString()}`);
       break;
     }
   }
   
-  // Extract From field
-  const fromMatch = forwardedSection.match(/From:\s*(.+?)(?:\n|$)/i);
+  if (!separatorFound) {
+    functions.logger.info(`   ⚠️  No separator found, searching entire content`);
+  }
+  
+  // Extract From field - look for "From:" followed by email
+  // Try multiple patterns to handle different email formats
+  const fromPatterns = [
+    /From:\s*(.+?)(?:\r?\n|$)/i,  // Standard "From: ..." with newline
+    /^From:\s*(.+?)$/im,          // "From: ..." at start of line
+    /From\s+(.+?)(?:\r?\n|$)/i,    // "From ..." (without colon)
+  ];
+  
+  let fromMatch = null;
+  for (const pattern of fromPatterns) {
+    fromMatch = forwardedSection.match(pattern);
+    if (fromMatch) break;
+  }
+  
   if (fromMatch) {
     const fromLine = fromMatch[1].trim();
+    functions.logger.info(`   🔍 Found From line: "${fromLine}"`);
+    
     // Parse "Name <email@domain.com>" or just "email@domain.com"
     const emailMatch = fromLine.match(/(.+?)\s*<(.+?)>/);
     if (emailMatch) {
@@ -234,21 +302,41 @@ function extractForwardedEmailInfo(content: string): { from?: { email: string; n
         name: emailMatch[1].replace(/"/g, '').trim(),
         email: emailMatch[2].trim(),
       };
+      functions.logger.info(`   ✅ Extracted From: ${result.from.email} (${result.from.name})`);
     } else {
-      // Just email address
+      // Just email address - try to find email in the line
       const emailAddress = fromLine.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
       if (emailAddress) {
         result.from = {
           email: emailAddress[1].trim(),
         };
+        functions.logger.info(`   ✅ Extracted From: ${result.from.email}`);
+      } else {
+        functions.logger.warn(`   ⚠️  Could not parse From line: "${fromLine}"`);
       }
     }
+  } else {
+    functions.logger.warn(`   ⚠️  No From: line found in forwarded section`);
   }
   
-  // Extract To field
-  const toMatch = forwardedSection.match(/To:\s*(.+?)(?:\n|$)/i);
+  // Extract To field - look for "To:" followed by email(s)
+  // Try multiple patterns
+  const toPatterns = [
+    /To:\s*(.+?)(?:\r?\n|$)/i,    // Standard "To: ..." with newline
+    /^To:\s*(.+?)$/im,             // "To: ..." at start of line
+    /To\s+(.+?)(?:\r?\n|$)/i,      // "To ..." (without colon)
+  ];
+  
+  let toMatch = null;
+  for (const pattern of toPatterns) {
+    toMatch = forwardedSection.match(pattern);
+    if (toMatch) break;
+  }
+  
   if (toMatch) {
     const toLine = toMatch[1].trim();
+    functions.logger.info(`   🔍 Found To line: "${toLine}"`);
+    
     // Extract email addresses from the To line
     const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
     const emails: string[] = [];
@@ -258,14 +346,64 @@ function extractForwardedEmailInfo(content: string): { from?: { email: string; n
     }
     if (emails.length > 0) {
       result.to = emails;
+      functions.logger.info(`   ✅ Extracted To: ${emails.join(', ')}`);
+    } else {
+      functions.logger.warn(`   ⚠️  Could not extract email addresses from To line: "${toLine}"`);
+    }
+  } else {
+    functions.logger.warn(`   ⚠️  No To: line found in forwarded section`);
+  }
+  
+  // Extract original email body/content (everything after the headers)
+  // Find where the actual email content starts (after Subject: or Date: or blank line after headers)
+  const contentStartPatterns = [
+    /Subject:[\s\S]*?\n\n/im,  // After Subject: and blank line (using [\s\S] instead of . with s flag)
+    /Date:[\s\S]*?\n\n/im,      // After Date: and blank line
+    /\n\n/,                     // Double newline (end of headers)
+  ];
+  
+  let originalContentStart = forwardedSection.length;
+  for (const pattern of contentStartPatterns) {
+    const match = forwardedSection.match(pattern);
+    if (match && match.index !== undefined) {
+      const startPos = match.index + match[0].length;
+      if (startPos < originalContentStart) {
+        originalContentStart = startPos;
+      }
+    }
+  }
+  
+  if (originalContentStart < forwardedSection.length) {
+    result.originalContent = forwardedSection.substring(originalContentStart).trim();
+    functions.logger.info(`   ✅ Extracted original email content (${result.originalContent.length} chars)`);
+  } else {
+    // If we couldn't find a clear separator, try to extract content after the last header
+    // Look for content after "Subject:" line
+    const subjectMatch = forwardedSection.match(/Subject:[\s\S]*?\n([\s\S]+)/im);
+    if (subjectMatch && subjectMatch[1]) {
+      result.originalContent = subjectMatch[1].trim();
+      functions.logger.info(`   ✅ Extracted original email content after Subject (${result.originalContent.length} chars)`);
+    } else {
+      // Fallback: use everything after From/To headers (remove header lines)
+      const afterHeaders = forwardedSection.replace(/^(From:|To:|Subject:|Date:).*?\n/gm, '').trim();
+      if (afterHeaders.length > 50) { // Only if there's substantial content
+        result.originalContent = afterHeaders;
+        functions.logger.info(`   ✅ Extracted original email content (fallback, ${result.originalContent.length} chars)`);
+      }
     }
   }
   
   // If we found at least From or To, return the result
   if (result.from || result.to) {
+    functions.logger.info(`   ✅ Successfully extracted forwarded email info:`, {
+      from: result.from,
+      to: result.to,
+      originalContentLength: result.originalContent?.length || 0,
+    });
     return result;
   }
   
+  functions.logger.warn(`   ❌ Could not extract any forwarded email info`);
   return null;
 }
 
@@ -507,6 +645,7 @@ function parseRoutingPattern(content: string, subject?: string): { accountName?:
     /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal):\s*([^\n]+)/i,
     /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal)\s+is\s+([^\n]+)/i,
     /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal)\s+=\s+([^\n]+)/i,
+    /(?:Opportunity|Deal|Project|Engagement|Lead|Proposal)\s+for\s+([^\n]+)/i, // "Opportunity for Projauto..."
   ];
   
   // Try each opportunity pattern
@@ -1211,6 +1350,10 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     
     // Check if this is a forwarded email to CRM mailbox
     let processedEmail = { ...email };
+    let originalEmailContent: string | null = null;
+    let originalSubject: string | null = null;
+    let forwardingWrapperContent: string | null = null; // Content before the forwarded section
+    
     if (isForwardedToCrm(email)) {
       functions.logger.info(`📧 Forwarded email to CRM detected: ${email.subject}`);
       
@@ -1219,13 +1362,37 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       const textContent = email.body?.text || '';
       const rawContent = textContent || extractTextFromHtml(htmlContent);
       
-      // Extract original From and To from forwarded content
+      // Find where the forwarded section starts to extract wrapper content
+      const separators = [
+        /-----Original Message-----/i,
+        /-----Forwarded Message-----/i,
+        /From:\s/i,
+        /^On .* wrote:/m,
+      ];
+      
+      let forwardedSectionStart = rawContent.length;
+      for (const separator of separators) {
+        const match = rawContent.match(separator);
+        if (match && match.index !== undefined && match.index < forwardedSectionStart) {
+          forwardedSectionStart = match.index;
+        }
+      }
+      
+      // Extract forwarding wrapper content (before the forwarded section)
+      if (forwardedSectionStart < rawContent.length) {
+        const wrapperContent = rawContent.substring(0, forwardedSectionStart).trim();
+        forwardingWrapperContent = wrapperContent;
+        functions.logger.info(`📧 Extracted forwarding wrapper content (${wrapperContent.length} chars) - may contain Account:/Opportunity: patterns`);
+      }
+      
+      // Extract original From, To, and content from forwarded email
       const forwardedInfo = extractForwardedEmailInfo(rawContent);
       
       if (forwardedInfo) {
         functions.logger.info(`📧 Extracted forwarded email info:`, {
           originalFrom: forwardedInfo.from,
           originalTo: forwardedInfo.to,
+          hasOriginalContent: !!forwardedInfo.originalContent,
         });
         
         // Replace email.from and email.to with extracted values
@@ -1237,6 +1404,21 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
         if (forwardedInfo.to && forwardedInfo.to.length > 0) {
           processedEmail.to = forwardedInfo.to;
           functions.logger.info(`📧 Using forwarded To: ${forwardedInfo.to.join(', ')}`);
+        }
+        
+        // Extract original subject from forwarded email headers
+        const subjectMatch = rawContent.match(/Subject:\s*(.+?)(?:\r?\n|$)/i);
+        if (subjectMatch && subjectMatch[1]) {
+          originalSubject = subjectMatch[1].trim();
+          functions.logger.info(`📧 Extracted original subject: "${originalSubject}"`);
+        }
+        
+        // Use original email content if extracted, otherwise use cleaned forwarded content
+        if (forwardedInfo.originalContent && forwardedInfo.originalContent.length > 50) {
+          originalEmailContent = forwardedInfo.originalContent;
+          functions.logger.info(`📧 Using original email content (${originalEmailContent.length} chars) instead of forwarded wrapper`);
+        } else {
+          functions.logger.warn(`⚠️  Could not extract original email content, will use forwarded content`);
         }
       } else {
         functions.logger.warn(`⚠️  Could not extract forwarded email info from content`);
@@ -1262,10 +1444,18 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       // Could add special parsing logic for internal emails here if needed
     }
     
-    // Get email content
-    const htmlContent = processedEmail.body?.html || '';
-    const textContent = processedEmail.body?.text || '';
-    let content = textContent || extractTextFromHtml(htmlContent);
+    // Get email content - use original content if this was a forwarded email
+    let content: string;
+    if (originalEmailContent) {
+      // Use the extracted original email content
+      content = originalEmailContent;
+      functions.logger.info(`📧 Using extracted original email content for analysis`);
+    } else {
+      // Use normal email content
+      const htmlContent = processedEmail.body?.html || '';
+      const textContent = processedEmail.body?.text || '';
+      content = textContent || extractTextFromHtml(htmlContent);
+    }
     
     // Clean content
     content = cleanEmailContent(content);
@@ -1370,7 +1560,28 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     
     // Step 1: Try explicit pattern matching (highest confidence)
     // Use cleaned subject for pattern matching
-    const routing = parseRoutingPattern(content, cleanedSubject);
+    // For forwarded emails, use the original subject if available
+    let subjectForPatternMatching = cleanedSubject;
+    if (originalSubject) {
+      // Clean the original subject
+      const cleanedOriginalSubject = cleanSubjectLine(originalSubject, parseSettings.subjectTokens);
+      if (cleanedOriginalSubject && cleanedOriginalSubject !== cleanedSubject) {
+        subjectForPatternMatching = cleanedOriginalSubject;
+        functions.logger.info(`📧 Using original email subject for pattern matching: "${subjectForPatternMatching}"`);
+      }
+    }
+    
+    // For forwarded emails, also search the forwarding wrapper content for patterns
+    // The forwarder may have added "Account:" or "Opportunity:" before forwarding
+    let contentForPatternMatching = content;
+    if (forwardingWrapperContent !== null && forwardingWrapperContent.length > 0) {
+      // Combine forwarding wrapper + original content for pattern matching
+      // This allows finding patterns in either location
+      contentForPatternMatching = `${forwardingWrapperContent}\n\n${content}`;
+      functions.logger.info(`📧 Including forwarding wrapper content in pattern matching (${forwardingWrapperContent.length} chars)`);
+    }
+    
+    const routing = parseRoutingPattern(contentForPatternMatching, subjectForPatternMatching);
     functions.logger.info(`🔍 Pattern matching results for email "${cleanedSubject}":`, {
       accountName: routing?.accountName || 'NOT FOUND',
       opportunityName: routing?.opportunityName || 'NOT FOUND',
@@ -1665,4 +1876,5 @@ export async function processUnprocessedEmails(createdBy?: string): Promise<Emai
 
 // Export processEmail for use in fetchEmails
 export { processEmail };
+
 
