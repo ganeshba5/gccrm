@@ -20,7 +20,6 @@ export default function OpportunityDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   // const [users] = useState<any[]>([]); // Reserved for future use
   const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
   const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
@@ -101,10 +100,6 @@ export default function OpportunityDashboard() {
       
       setAccountsLoaded(false);
       
-      // Get all accounts (not just from opportunities) for the filter dropdown
-      const allAccounts = await accountService.getAll();
-      setAccounts(allAccounts);
-      
       // Get all opportunities first (already filtered by owner for non-admin)
       const allOpportunities = await opportunityService.getAll();
       
@@ -136,7 +131,7 @@ export default function OpportunityDashboard() {
     }
   };
 
-  const handleAccountCreated = async (newAccount: Account) => {
+  const handleAccountCreated = async (_newAccount: Account) => {
     // Reload accounts list
     await fetchAccounts();
     setShowCreateAccount(false);
