@@ -526,21 +526,20 @@ export default function OpportunityDashboard() {
           </button>
         </div>
 
-        {/* Search field */}
-        <div className="mb-3">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Name, Description, Notes..."
-            className="w-full max-w-md px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-          />
-          {notesLoading && searchTerm.trim() && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Loading notes...</p>
-          )}
-        </div>
-        
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Search field */}
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by Name, Description, Notes..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+            />
+            {notesLoading && searchTerm.trim() && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Loading notes...</p>
+            )}
+          </div>
           <select 
             value={filterStage}
             onChange={(e) => setFilterStage(e.target.value)}

@@ -16,8 +16,6 @@ export function AccountList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accountEditPermissions, setAccountEditPermissions] = useState<Map<string, boolean>>(new Map());
-  const [accountSearch, setAccountSearch] = useState<string>('');
-  const [accountFocused, setAccountFocused] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [accountNotes, setAccountNotes] = useState<Map<string, string>>(new Map());
   const [notesLoading, setNotesLoading] = useState(false);
@@ -166,9 +164,6 @@ export function AccountList() {
       }
     }
     
-    // First apply account name search filter (for combo box)
-    const matchesAccountSearch = account.name.toLowerCase().includes(accountSearch.toLowerCase());
-    
     // Apply general search filter (Name, Description, Industry, Website, Notes)
     if (searchTerm.trim() !== '') {
       const searchLower = searchTerm.toLowerCase();
@@ -182,14 +177,9 @@ export function AccountList() {
       return matchesName || matchesDescription || matchesIndustry || matchesWebsite || matchesNotes;
     }
     
-    // If there's an explicit account name search, show the account even if it has 0 opportunities
-    if (accountSearch.trim() !== '') {
-      return matchesAccountSearch;
-    }
-    
     // If no search, only show accounts with at least 1 visible opportunity
     const visibleOppCount = getVisibleOpportunityCount(account.id);
-    return matchesAccountSearch && visibleOppCount > 0;
+    return visibleOppCount > 0;
   });
 
   if (loading) {
@@ -248,51 +238,6 @@ export function AccountList() {
         {notesLoading && searchTerm.trim() && (
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Loading notes...</p>
         )}
-      </div>
-      
-      {/* Account search combo box */}
-      <div className="max-w-xs">
-        <div className="relative">
-          <input
-            type="text"
-            value={accountSearch}
-            onChange={(e) => setAccountSearch(e.target.value)}
-            onFocus={() => setAccountFocused(true)}
-            onBlur={() => {
-              setTimeout(() => setAccountFocused(false), 200);
-            }}
-            placeholder="Search Accounts"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
-          />
-          {accountFocused && (accountSearch === '' || accounts.some(account => 
-            account.name.toLowerCase().includes(accountSearch.toLowerCase())
-          )) && (
-            <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                onClick={() => setAccountSearch('')}
-              >
-                All Accounts
-              </button>
-              {accounts
-                .filter((account) =>
-                  accountSearch === '' || account.name.toLowerCase().includes(accountSearch.toLowerCase())
-                )
-                .slice(0, 20)
-                .map((account) => (
-                  <button
-                    key={account.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    onClick={() => setAccountSearch(account.name)}
-                  >
-                    {account.name}
-                  </button>
-                ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Mobile/Tablet Card View */}
