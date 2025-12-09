@@ -675,98 +675,90 @@ export function ContactForm() {
                 No notes found
               </div>
             ) : (
-              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
-                {/* Grid Header */}
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
-                  <div className="col-span-3">Created By</div>
-                  <div className="col-span-4">Content</div>
-                  <div className="col-span-2">Date</div>
-                  <div className="col-span-1">Status</div>
-                  <div className="col-span-2">Actions</div>
-                </div>
-                {/* Grid Rows */}
-                <div className="divide-y divide-gray-200 dark:divide-gray-600">
-                  {notes.map((note) => {
-                    const isExpanded = expandedNotes.has(note.id);
-                    const isEditing = editingNoteId === note.id;
-                    
-                    if (isEditing) {
-                      return (
-                        <div key={note.id} className="px-3 py-3 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500">
-                          <form onSubmit={handleUpdateNote} className="space-y-2">
-                            <RichTextEditor
-                              value={editNoteContent}
-                              onChange={setEditNoteContent}
-                              attachments={editNoteAttachments}
-                              onAttachmentsChange={setEditNoteAttachments}
-                              placeholder="Enter your note here..."
-                            />
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {notes.map((note) => {
+                  const isExpanded = expandedNotes.has(note.id);
+                  const isEditing = editingNoteId === note.id;
+                  
+                  if (isEditing) {
+                    return (
+                      <div key={note.id} className="p-4 bg-brand-50 dark:bg-brand-900/10 border-l-4 border-brand-500 rounded-lg">
+                        <form onSubmit={handleUpdateNote} className="space-y-3">
+                          <RichTextEditor
+                            value={editNoteContent}
+                            onChange={setEditNoteContent}
+                            attachments={editNoteAttachments}
+                            onAttachmentsChange={setEditNoteAttachments}
+                            placeholder="Enter your note here..."
+                          />
+                          <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
                                 id={`edit-isPrivate-${note.id}`}
                                 checked={editIsPrivate}
                                 onChange={(e) => setEditIsPrivate(e.target.checked)}
-                                className="h-3 w-3 text-brand-500 focus:ring-brand-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-brand-500 focus:ring-brand-500 border-gray-300 rounded"
                               />
-                              <label htmlFor={`edit-isPrivate-${note.id}`} className="text-xs text-gray-700 dark:text-gray-300">
+                              <label htmlFor={`edit-isPrivate-${note.id}`} className="text-sm text-gray-700 dark:text-gray-300">
                                 Private
                               </label>
-                              <div className="flex-1"></div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={handleCancelEdit}
-                                className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                                className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                               >
                                 Cancel
                               </button>
                               <button
                                 type="submit"
-                                className="px-2 py-1 text-xs font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
+                                className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded hover:bg-brand-600"
                               >
                                 Save
                               </button>
                             </div>
-                          </form>
-                        </div>
-                      );
-                    }
-                    
-                    return (
-                      <div key={note.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-start">
-                        <div className="col-span-3">
-                          <span className="text-xs text-gray-900 dark:text-white truncate block">
-                            {getUserName(note.createdBy)}
-                          </span>
-                        </div>
-                        <div className="col-span-4">
-                          <NoteContent
-                            content={note.content}
-                            attachments={note.attachments}
-                            maxLength={80}
-                            showFull={isExpanded}
-                            onToggleExpand={() => toggleNoteExpansion(note.id)}
-                            viewOnly={false}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            {formatDate(note.createdAt)}
-                          </span>
-                        </div>
-                        <div className="col-span-1">
-                          {note.isPrivate && (
-                            <span className="px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded whitespace-nowrap">
-                              Private
+                          </div>
+                        </form>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={note.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {getUserName(note.createdBy)}
                             </span>
-                          )}
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatDate(note.createdAt)}
+                            </span>
+                            {note.isPrivate && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 rounded">
+                                Private
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            <NoteContent
+                              content={note.content}
+                              attachments={note.attachments}
+                              maxLength={200}
+                              showFull={isExpanded}
+                              onToggleExpand={() => toggleNoteExpansion(note.id)}
+                              viewOnly={false}
+                            />
+                          </div>
                         </div>
-                        <div className="col-span-2 flex items-center justify-end gap-1">
+                        <div className="flex items-center gap-1 ml-4">
                           {user && note.createdBy === user.id && (
                             <>
                               <button
                                 onClick={() => handleEditNote(note)}
-                                className="p-1 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
+                                className="p-1.5 text-brand-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded transition-colors"
                                 title="Edit"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -775,7 +767,7 @@ export function ContactForm() {
                               </button>
                               <button
                                 onClick={() => handleDeleteNote(note.id)}
-                                className="p-1 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
+                                className="p-1.5 text-error-500 hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-500/10 rounded transition-colors"
                                 title="Delete"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -786,9 +778,9 @@ export function ContactForm() {
                           )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
               </>
