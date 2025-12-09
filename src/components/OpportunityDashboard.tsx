@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import OpportunityTable from './OpportunityTable';
 // OpportunityProfilePanel removed - OpportunityForm is now a route
 import AddOpportunityModal from './AddOpportunityModal';
@@ -18,7 +18,6 @@ import NestedDateFilter from './NestedDateFilter';
 
 export default function OpportunityDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { id } = useParams();
   const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
