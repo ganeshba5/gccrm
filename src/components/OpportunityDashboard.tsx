@@ -28,9 +28,6 @@ export default function OpportunityDashboard() {
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [filterStage, setFilterStage] = useState<string>('all');
-  const [filterAccount, setFilterAccount] = useState<string>('all');
-  const [accountSearch, setAccountSearch] = useState<string>('');
-  const [accountFocused, setAccountFocused] = useState<boolean>(false);
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
@@ -142,17 +139,8 @@ export default function OpportunityDashboard() {
   const handleAccountCreated = async (newAccount: Account) => {
     // Reload accounts list
     await fetchAccounts();
-    // Set the newly created account as filter
-    setAccountSearch(newAccount.name);
-    setFilterAccount(newAccount.id);
     setShowCreateAccount(false);
   };
-
-  // Check if account name doesn't exist
-  const accountExists = accounts.some(
-    (account) => account.name.toLowerCase() === accountSearch.toLowerCase()
-  );
-  const showCreateOption = accountSearch.trim() && !accountExists && accountSearch.length > 0;
 
   const fetchUsers = async () => {
     try {
@@ -434,21 +422,21 @@ export default function OpportunityDashboard() {
     // Stage filter
     if (filterStage !== 'all' && opp.stage !== filterStage) return false;
     
-    // Account filter
-    if (filterAccount !== 'all' && opp.accountId !== filterAccount) return false;
-    
     // Owner filter (specific owner selection)
     if (filterOwner !== 'all' && opp.owner !== filterOwner) return false;
     
-    // Search filter (Name, Description, Notes)
+    // Search filter (Account, Opportunity Name, Description, Notes)
     if (searchTerm.trim() !== '') {
       const searchLower = searchTerm.toLowerCase();
       const matchesName = opp.name?.toLowerCase().includes(searchLower) || false;
       const matchesDescription = opp.description?.toLowerCase().includes(searchLower) || false;
       const notesContent = opportunityNotes.get(opp.id) || '';
       const matchesNotes = notesContent.toLowerCase().includes(searchLower);
+      // Search by account name
+      const accountName = opp.accountId ? accountNames.get(opp.accountId) : '';
+      const matchesAccount = accountName?.toLowerCase().includes(searchLower) || false;
       
-      if (!matchesName && !matchesDescription && !matchesNotes) {
+      if (!matchesName && !matchesDescription && !matchesNotes && !matchesAccount) {
         return false;
       }
     }
@@ -533,7 +521,7 @@ export default function OpportunityDashboard() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by Name, Description, Notes..."
+              placeholder="Search by Account, Opportunity, Description, Notes..."
               className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
             />
             {notesLoading && searchTerm.trim() && (
@@ -553,93 +541,6 @@ export default function OpportunityDashboard() {
             <option value="Closed Won">Closed Won</option>
             <option value="Closed Lost">Closed Lost</option>
           </select>
-          {/* Account combo box */}
-          <div className="relative">
-            <input
-              type="text"
-              value={accountSearch}
-              onChange={(e) => {
-                const value = e.target.value;
-                setAccountSearch(value);
-                // If exact match, set filterAccount, otherwise show all
-                const match = accounts.find(
-                  (account) => account.name.toLowerCase() === value.toLowerCase()
-                );
-                setFilterAccount(match ? match.id : 'all');
-              }}
-              onFocus={() => setAccountFocused(true)}
-              onBlur={() => {
-                // Close dropdown when input loses focus
-                // Use setTimeout to allow onClick to fire first
-                setTimeout(() => {
-                  setAccountFocused(false);
-                  const exactMatch = accounts.find(
-                    (account) => account.name.toLowerCase() === accountSearch.toLowerCase()
-                  );
-                  if (exactMatch) {
-                    // Keep the search value if it matches
-                    setAccountSearch(exactMatch.name);
-                  } else if (filterAccount === 'all') {
-                    // Clear search if no account is selected
-                    setAccountSearch('');
-                  }
-                }, 200);
-              }}
-              placeholder="All Accounts"
-              className="px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 min-w-[200px]"
-            />
-            {accountFocused && (accountSearch === '' || accounts.some(account => 
-              account.name.toLowerCase().includes(accountSearch.toLowerCase()) &&
-              account.name.toLowerCase() !== accountSearch.toLowerCase()
-            ) || showCreateOption) && (
-              <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  onMouseDown={(e) => {
-                    e.preventDefault(); // Prevent input blur
-                    setAccountSearch('');
-                    setFilterAccount('all');
-                  }}
-                >
-                  All Accounts
-                </button>
-                {accounts
-                  .filter((account) =>
-                    accountSearch === '' || account.name.toLowerCase().includes(accountSearch.toLowerCase())
-                  )
-                  .slice(0, 20)
-                  .map((account) => (
-                    <button
-                      key={account.id}
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      onMouseDown={(e) => {
-                        e.preventDefault(); // Prevent input blur
-                        setAccountSearch(account.name);
-                        setFilterAccount(account.id);
-                      }}
-                    >
-                      {account.name}
-                    </button>
-                  ))}
-                {showCreateOption && (
-                  <div className="border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 font-medium"
-                      onMouseDown={(e) => {
-                        e.preventDefault(); // Prevent input blur
-                        setShowCreateAccount(true);
-                      }}
-                    >
-                      + Create "{accountSearch}"
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
           {/* Owner combo box */}
           <div className="relative">
             <input
@@ -738,13 +639,11 @@ export default function OpportunityDashboard() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all' || filterOwner !== 'all' || opportunityFilter !== 'all' || searchTerm.trim() !== '') && (
+            {(dateFilterType !== 'all' || filterStage !== 'all' || filterOwner !== 'all' || opportunityFilter !== 'all' || searchTerm.trim() !== '') && (
               <button
                 onClick={() => {
                   setOpportunityFilter('all');
                   setFilterStage('all');
-                  setFilterAccount('all');
-                  setAccountSearch('');
                   setFilterOwner('all');
                   setOwnerSearch('');
                   setDateFilterType('all');
@@ -786,7 +685,7 @@ export default function OpportunityDashboard() {
       />
       <CreateAccountModal
         open={showCreateAccount}
-        accountName={accountSearch}
+        accountName=""
         onClose={() => setShowCreateAccount(false)}
         onCreated={handleAccountCreated}
       />
