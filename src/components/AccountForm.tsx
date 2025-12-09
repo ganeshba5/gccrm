@@ -505,9 +505,21 @@ export function AccountForm() {
       <div className="p-6">
       <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
-            {isViewMode ? 'View Account' : id ? 'Edit Account' : 'New Account'}
-          </h2>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/accounts')}
+              className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
+              title="Back to Accounts"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
+              {isViewMode ? 'View Account' : id ? 'Edit Account' : 'New Account'}
+            </h2>
+          </div>
           <div className="flex items-center gap-3">
             {/* Shared Users Button - only show for admins and owners */}
             {id && user && canManageSharedUsers && (

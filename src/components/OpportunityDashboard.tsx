@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import OpportunityTable from './OpportunityTable';
-// OpportunityProfilePanel removed - EditOpportunityModal is used instead
+// OpportunityProfilePanel removed - OpportunityForm is now a route
 import AddOpportunityModal from './AddOpportunityModal';
-import EditOpportunityModal from './EditOpportunityModal';
 import CreateAccountModal from './CreateAccountModal';
 import { useAuth } from '../context/AuthContext';
 import type { Opportunity } from '../types/opportunity';
@@ -11,6 +10,7 @@ import type { Account } from '../types/account';
 // User type removed - not directly used in this component
 import { opportunityService } from '../services/opportunityService';
 import { accountService } from '../services/accountService';
+import { noteService } from '../services/noteService';
 import { userService } from '../services/userService';
 import { configSettingService } from '../services/configSettingService';
 import NestedDateFilter from './NestedDateFilter';
@@ -27,10 +27,7 @@ export default function OpportunityDashboard() {
   const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
-  // selectedOpportunity removed - using opportunityToEdit instead
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [opportunityToEdit, setOpportunityToEdit] = useState<Opportunity | null>(null);
   const [filterStage, setFilterStage] = useState<string>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
   const [accountSearch, setAccountSearch] = useState<string>('');
@@ -39,6 +36,9 @@ export default function OpportunityDashboard() {
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
   const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>('my');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [opportunityNotes, setOpportunityNotes] = useState<Map<string, string>>(new Map());
+  const [notesLoading, setNotesLoading] = useState(false);
   const [dateFilterType, setDateFilterType] = useState<string>(() => {
     const saved = localStorage.getItem('opportunities_dateFilterType');
     // If no saved value, default to current year (first time use)
@@ -77,18 +77,7 @@ export default function OpportunityDashboard() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Check for ID in URL params to open edit modal
-  useEffect(() => {
-    if (id && opportunities.length > 0) {
-      const opportunity = opportunities.find(opp => opp.id === id);
-      if (opportunity) {
-        setOpportunityToEdit(opportunity);
-        setIsEditOpen(true);
-        // Navigate back to /opportunities to clean up URL
-        navigate('/opportunities', { replace: true });
-      }
-    }
-  }, [id, opportunities, navigate]);
+  // No longer needed - edit is now handled by route
 
   // Save filter settings to localStorage whenever they change
   useEffect(() => {
@@ -224,9 +213,43 @@ export default function OpportunityDashboard() {
     await fetchOpportunities();
   };
 
+  // Load notes for opportunities when search term is present
+  useEffect(() => {
+    if (searchTerm.trim() && opportunities.length > 0) {
+      const loadNotesForOpportunities = async () => {
+        setNotesLoading(true);
+        const notesMap = new Map<string, string>();
+        try {
+          await Promise.all(
+            opportunities.map(async (opportunity) => {
+              try {
+                const notes = await noteService.getByOpportunity(opportunity.id);
+                const notesContent = notes.map(n => n.content.replace(/<[^>]*>/g, '')).join(' ');
+                if (notesContent) {
+                  notesMap.set(opportunity.id, notesContent);
+                }
+              } catch (err) {
+                console.error(`Error loading notes for opportunity ${opportunity.id}:`, err);
+              }
+            })
+          );
+          setOpportunityNotes(notesMap);
+        } catch (err) {
+          console.error('Error loading notes:', err);
+        } finally {
+          setNotesLoading(false);
+        }
+      };
+      loadNotesForOpportunities();
+    } else {
+      setOpportunityNotes(new Map());
+    }
+  }, [searchTerm, opportunities]);
+
   const handleEdit = (opportunity: Opportunity) => {
-    setOpportunityToEdit(opportunity);
-    setIsEditOpen(true);
+    if (opportunity.id) {
+      navigate(`/opportunities/${opportunity.id}/edit`);
+    }
   };
 
   const handleDelete = async (opportunity: Opportunity) => {
@@ -244,13 +267,7 @@ export default function OpportunityDashboard() {
     }
   };
 
-  const handleEditUpdate = async () => {
-    setTimeout(async () => {
-      await refreshOpportunities();
-    }, 500);
-    setIsEditOpen(false);
-    setOpportunityToEdit(null);
-  };
+  // No longer needed - edit is now handled by route
 
   useEffect(() => {
     if (authLoading) {
@@ -424,6 +441,19 @@ export default function OpportunityDashboard() {
     // Owner filter (specific owner selection)
     if (filterOwner !== 'all' && opp.owner !== filterOwner) return false;
     
+    // Search filter (Name, Description, Notes)
+    if (searchTerm.trim() !== '') {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesName = opp.name?.toLowerCase().includes(searchLower) || false;
+      const matchesDescription = opp.description?.toLowerCase().includes(searchLower) || false;
+      const notesContent = opportunityNotes.get(opp.id) || '';
+      const matchesNotes = notesContent.toLowerCase().includes(searchLower);
+      
+      if (!matchesName && !matchesDescription && !matchesNotes) {
+        return false;
+      }
+    }
+    
     // Date filter (filter by expectedCloseDate within selected range)
     if (dateFilterType !== 'all') {
       const { start, end } = getDateRange();
@@ -495,6 +525,20 @@ export default function OpportunityDashboard() {
           >
             My Opportunities
           </button>
+        </div>
+
+        {/* Search field */}
+        <div className="mb-3">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by Name, Description, Notes..."
+            className="w-full max-w-md px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+          />
+          {notesLoading && searchTerm.trim() && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Loading notes...</p>
+          )}
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
@@ -696,7 +740,7 @@ export default function OpportunityDashboard() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all' || filterOwner !== 'all' || opportunityFilter !== 'all') && (
+            {(dateFilterType !== 'all' || filterStage !== 'all' || filterAccount !== 'all' || filterOwner !== 'all' || opportunityFilter !== 'all' || searchTerm.trim() !== '') && (
               <button
                 onClick={() => {
                   setOpportunityFilter('all');
@@ -709,6 +753,7 @@ export default function OpportunityDashboard() {
                   setDateFilterValue('');
                   setCustomStartDate('');
                   setCustomEndDate('');
+                  setSearchTerm('');
                 }}
                 className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
               >
@@ -740,19 +785,6 @@ export default function OpportunityDashboard() {
           }, 500);
           setIsAddOpen(false); 
         }}
-      />
-      <EditOpportunityModal
-        open={isEditOpen}
-        onClose={() => {
-          setIsEditOpen(false);
-          setOpportunityToEdit(null);
-          // Navigate back to base opportunities route if we came from edit route
-          if (id) {
-            navigate('/opportunities', { replace: true });
-          }
-        }}
-        onUpdate={handleEditUpdate}
-        opportunity={opportunityToEdit}
       />
       <CreateAccountModal
         open={showCreateAccount}

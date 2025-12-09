@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { Opportunity } from '../types/opportunity';
 import type { Note, NoteAttachment } from '../types/note';
 import type { Task } from '../types/task';
@@ -18,17 +19,9 @@ import { SharedUsersManager } from './SharedUsersManager';
 import type { SharedUser } from '../types/account';
 import { canAccessAllData } from '../lib/auth-helpers';
 
-export default function EditOpportunityModal({ 
-  open, 
-  onClose, 
-  onUpdate, 
-  opportunity 
-}: { 
-  open: boolean; 
-  onClose: () => void; 
-  onUpdate: () => void;
-  opportunity: Opportunity | null;
-}) {
+export default function OpportunityForm() {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [accountId, setAccountId] = useState('');
   const [amount, setAmount] = useState('');
@@ -79,57 +72,67 @@ export default function EditOpportunityModal({
     department: '',
   });
   const { user } = useAuth();
+  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
 
+  // Load opportunity from URL params
   useEffect(() => {
-    if (opportunity) {
-      setName(opportunity.name || '');
-      setAccountId(opportunity.accountId || '');
-      setAmount(opportunity.amount?.toString() || '');
-      setStage(opportunity.stage || 'New');
-      setProbability(opportunity.probability?.toString() || '');
-      setExpectedCloseDate(opportunity.expectedCloseDate ? opportunity.expectedCloseDate.toISOString().split('T')[0] : '');
-      setDescription(opportunity.description || '');
-      setSharedUsers(opportunity.sharedUsers || []);
-      
-      // Check if user can manage shared users (admin or owner only)
-      const checkPermissions = async () => {
-        if (user) {
-          const isAdmin = await canAccessAllData();
-          const isOwner = opportunity.owner === user.id;
-          setCanManageSharedUsers(isAdmin || isOwner);
-        }
-      };
-      checkPermissions();
-      
-      // Fetch account name if accountId exists
-      if (opportunity.accountId) {
-        accountService.getById(opportunity.accountId)
-          .then(account => {
-            if (account) {
-              setAccountName(account.name);
+    if (id) {
+      opportunityService.getById(id)
+        .then(loadedOpportunity => {
+          if (loadedOpportunity) {
+            setOpportunity(loadedOpportunity);
+            setName(loadedOpportunity.name || '');
+            setAccountId(loadedOpportunity.accountId || '');
+            setAmount(loadedOpportunity.amount?.toString() || '');
+            setStage(loadedOpportunity.stage || 'New');
+            setProbability(loadedOpportunity.probability?.toString() || '');
+            setExpectedCloseDate(loadedOpportunity.expectedCloseDate ? loadedOpportunity.expectedCloseDate.toISOString().split('T')[0] : '');
+            setDescription(loadedOpportunity.description || '');
+            setSharedUsers(loadedOpportunity.sharedUsers || []);
+            
+            // Check if user can manage shared users (admin or owner only)
+            const checkPermissions = async () => {
+              if (user) {
+                const isAdmin = await canAccessAllData();
+                const isOwner = loadedOpportunity.owner === user.id;
+                setCanManageSharedUsers(isAdmin || isOwner);
+              }
+            };
+            checkPermissions();
+            
+            // Fetch account name if accountId exists
+            if (loadedOpportunity.accountId) {
+              accountService.getById(loadedOpportunity.accountId)
+                .then(account => {
+                  if (account) {
+                    setAccountName(account.name);
+                  } else {
+                    setAccountName(null);
+                  }
+                })
+                .catch(err => {
+                  console.error('Error fetching account:', err);
+                  setAccountName(null);
+                });
             } else {
               setAccountName(null);
             }
-          })
-          .catch(err => {
-            console.error('Error fetching account:', err);
-            setAccountName(null);
-          });
-      } else {
-        setAccountName(null);
-      }
-      
-      // Load notes, tasks, and contacts for this opportunity
-      if (opportunity.id) {
-        loadNotes(opportunity.id);
-        loadTasks(opportunity.id);
-        // Load contacts from parent account
-        if (opportunity.accountId) {
-          loadContacts(opportunity.accountId);
-        }
-      }
+            
+            // Load notes, tasks, and contacts for this opportunity
+            loadNotes(loadedOpportunity.id);
+            loadTasks(loadedOpportunity.id);
+            // Load contacts from parent account
+            if (loadedOpportunity.accountId) {
+              loadContacts(loadedOpportunity.accountId);
+            }
+          }
+        })
+        .catch(err => {
+          console.error('Error loading opportunity:', err);
+          setError('Failed to load opportunity');
+        });
     }
-  }, [opportunity]);
+  }, [id, user]);
 
   useEffect(() => {
     // Load users for displaying note creators
@@ -380,7 +383,29 @@ export default function EditOpportunityModal({
     }
   };
 
-  if (!open || !opportunity) return null;
+  if (!id) {
+    return (
+      <div className="p-6">
+        <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            No opportunity ID provided
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!opportunity) {
+    return (
+      <div className="p-6">
+        <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            Loading opportunity...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const resetForm = () => {
     if (opportunity) {
@@ -394,11 +419,6 @@ export default function EditOpportunityModal({
       setSharedUsers(opportunity.sharedUsers || []);
     }
     setError(null);
-  };
-
-  const handleClose = () => {
-    resetForm();
-    onClose();
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -454,8 +474,7 @@ export default function EditOpportunityModal({
       await opportunityService.update(opportunity.id, updateData);
       
       resetForm();
-      onUpdate();
-      onClose();
+      navigate('/opportunities');
     } catch (err: any) {
       console.error('Failed to update opportunity:', err);
       
@@ -477,10 +496,24 @@ export default function EditOpportunityModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex justify-center items-start z-50 overflow-y-auto pt-24 px-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-theme-lg w-full max-w-2xl mb-8 px-4 sm:px-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Opportunity</h3>
+    <div className="p-6">
+      <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/opportunities')}
+              className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
+              title="Back to Opportunities"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
+              Edit Opportunity
+            </h2>
+          </div>
           <div className="flex items-center gap-3">
             {/* Shared Users Button - only show for admins and owners */}
             {user && canManageSharedUsers && (
@@ -491,11 +524,11 @@ export default function EditOpportunityModal({
                 currentUserId={user.id}
               />
             )}
+            {/* Cancel and Save buttons as icons */}
             <div className="flex items-center gap-2">
-              {/* Cancel icon */}
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={() => navigate('/opportunities')}
                 className="p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
                 title="Cancel"
               >
@@ -503,13 +536,12 @@ export default function EditOpportunityModal({
                   <path d="M6 6L14 14M6 14L14 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              {/* Save icon */}
               <button
                 type="submit"
                 form="edit-opportunity-form"
-                className="p-1.5 rounded-full text-brand-500 hover:text-white hover:bg-brand-500 dark:text-brand-400 dark:hover:bg-brand-500 transition-colors disabled:opacity-50"
-                title="Save"
                 disabled={loading}
+                className="p-1.5 rounded-full text-brand-500 hover:text-white hover:bg-brand-500 dark:text-brand-400 dark:hover:bg-brand-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={loading ? 'Saving...' : 'Save Opportunity'}
               >
                 <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M5 10.5L8.5 14L15 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -518,119 +550,127 @@ export default function EditOpportunityModal({
             </div>
           </div>
         </div>
-        
+
         {error && (
-          <div className="mb-3 p-2.5 bg-error-50 border border-error-200 rounded-lg text-error-700 text-xs dark:bg-error-900/20 dark:border-error-800 dark:text-error-400">
+          <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-lg text-error-700 text-sm dark:bg-error-900/20 dark:border-error-800 dark:text-error-400">
             {error}
           </div>
         )}
 
-        <form id="edit-opportunity-form" onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Name:
-                </label>
-                <input 
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
-                  required 
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Account:
-                </label>
-                <input 
-                  value={accountName || accountId || ''} 
-                  readOnly
-                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-not-allowed" 
-                  disabled={true}
-                  placeholder={accountId ? 'Loading account name...' : 'No account'}
-                />
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4">
-                <div className="flex items-center gap-2 sm:flex-1">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    Amount:
-                  </label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    value={amount} 
-                    onChange={e => setAmount(e.target.value)} 
-                    className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
-                    disabled={loading}
-                  />
-                </div>
-                <div className="flex items-center gap-2 sm:flex-1 mt-2 sm:mt-0">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    Stage:
-                  </label>
-                  <select
-                    value={stage}
-                    onChange={e => setStage(e.target.value as Opportunity['stage'])}
-                    className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
-                    required
-                    disabled={loading}
-                  >
-                    <option value="New">New</option>
-                    <option value="Qualified">Qualified</option>
-                    <option value="Proposal">Proposal</option>
-                    <option value="Negotiation">Negotiation</option>
-                    <option value="Closed Won">Closed Won</option>
-                    <option value="Closed Lost">Closed Lost</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Probability (%):
-                </label>
-                <input 
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={probability} 
-                  onChange={e => setProbability(e.target.value)} 
-                  className="w-20 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                  Close Date:
-                </label>
-                <DatePicker
-                  value={expectedCloseDate}
-                  onChange={setExpectedCloseDate}
-                  placeholder="Select close date"
-                  disabled={loading}
-                  className="flex-1 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10"
-                />
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 text-left">Description:</label>
-              <textarea 
-                value={description} 
-                onChange={e => setDescription(e.target.value)} 
-                className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10" 
-                rows={6}
+        <form id="edit-opportunity-form" onSubmit={handleSubmit} className="space-y-4">
+          {/* Opportunity Name: Label and Field in 1 line */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Opportunity Name *
+            </label>
+            <input
+              type="text"
+              id="name"
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
+              required 
+              disabled={loading}
+            />
+          </div>
+
+          {/* Account: Label and Field in 1 line */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="account" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Account:
+            </label>
+            <input 
+              id="account"
+              value={accountName || accountId || ''} 
+              readOnly
+              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-700" 
+              disabled={true}
+              placeholder={accountId ? 'Loading account name...' : 'No account'}
+            />
+          </div>
+
+          {/* Amount, Stage: Labels and fields spread out */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="amount" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Amount:
+              </label>
+              <input 
+                type="number"
+                id="amount"
+                step="0.01"
+                value={amount} 
+                onChange={e => setAmount(e.target.value)} 
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
                 disabled={loading}
               />
             </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="stage" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Stage:
+              </label>
+              <select
+                id="stage"
+                value={stage}
+                onChange={e => setStage(e.target.value as Opportunity['stage'])}
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                required
+                disabled={loading}
+              >
+                <option value="New">New</option>
+                <option value="Qualified">Qualified</option>
+                <option value="Proposal">Proposal</option>
+                <option value="Negotiation">Negotiation</option>
+                <option value="Closed Won">Closed Won</option>
+                <option value="Closed Lost">Closed Lost</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Probability, Close Date: Labels and fields spread out */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="probability" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Probability (%):
+              </label>
+              <input 
+                type="number"
+                id="probability"
+                min="0"
+                max="100"
+                value={probability} 
+                onChange={e => setProbability(e.target.value)} 
+                className="w-20 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
+                disabled={loading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="closeDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Close Date:
+              </label>
+              <DatePicker
+                value={expectedCloseDate}
+                onChange={setExpectedCloseDate}
+                placeholder="Select close date"
+                disabled={loading}
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
+
+          {/* Description: Label left aligned */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left mb-1">
+              Description
+            </label>
+            <textarea 
+              id="description"
+              value={description} 
+              onChange={e => setDescription(e.target.value)} 
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
+              rows={6}
+              disabled={loading}
+            />
           </div>
         </form>
 

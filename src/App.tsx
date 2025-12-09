@@ -6,6 +6,7 @@ import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import Dashboard from './components/Dashboard';
 import OpportunityDashboard from './components/OpportunityDashboard';
+import OpportunityForm from './components/OpportunityForm';
 // ContactsPage, TasksPage, NotesPage are used via EntityNotesPage and EntityTasksPage
 import SettingsPage from './components/SettingsPage';
 import { AccountList } from './components/AccountList';
@@ -51,7 +52,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <OpportunityDashboard />
+                  <OpportunityForm />
                 </DashboardLayout>
               </ProtectedRoute>
             }

@@ -4,6 +4,7 @@ import type { Account } from '../types/account';
 import type { Opportunity } from '../types/opportunity';
 import { accountService } from '../services/accountService';
 import { opportunityService } from '../services/opportunityService';
+import { noteService } from '../services/noteService';
 import { configSettingService } from '../services/configSettingService';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
@@ -17,6 +18,9 @@ export function AccountList() {
   const [accountEditPermissions, setAccountEditPermissions] = useState<Map<string, boolean>>(new Map());
   const [accountSearch, setAccountSearch] = useState<string>('');
   const [accountFocused, setAccountFocused] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [accountNotes, setAccountNotes] = useState<Map<string, string>>(new Map());
+  const [notesLoading, setNotesLoading] = useState(false);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [viewHistoryFrom, setViewHistoryFrom] = useState<Date | null>(null);
   const [accountFilter, setAccountFilter] = useState<'all' | 'my'>('my');
@@ -26,6 +30,39 @@ export function AccountList() {
     loadOpportunities();
     loadViewHistoryFrom();
   }, []);
+
+  // Load notes for accounts when search term is present
+  useEffect(() => {
+    if (searchTerm.trim() && accounts.length > 0) {
+      const loadNotesForAccounts = async () => {
+        setNotesLoading(true);
+        const notesMap = new Map<string, string>();
+        try {
+          await Promise.all(
+            accounts.map(async (account) => {
+              try {
+                const notes = await noteService.getByAccount(account.id);
+                const notesContent = notes.map(n => n.content.replace(/<[^>]*>/g, '')).join(' ');
+                if (notesContent) {
+                  notesMap.set(account.id, notesContent);
+                }
+              } catch (err) {
+                console.error(`Error loading notes for account ${account.id}:`, err);
+              }
+            })
+          );
+          setAccountNotes(notesMap);
+        } catch (err) {
+          console.error('Error loading notes:', err);
+        } finally {
+          setNotesLoading(false);
+        }
+      };
+      loadNotesForAccounts();
+    } else {
+      setAccountNotes(new Map());
+    }
+  }, [searchTerm, accounts]);
 
   // Load opportunities to count visible ones per account
   const loadOpportunities = async () => {
@@ -129,17 +166,30 @@ export function AccountList() {
       }
     }
     
-    // First apply search filter
-    const matchesSearch = account.name.toLowerCase().includes(accountSearch.toLowerCase());
+    // First apply account name search filter (for combo box)
+    const matchesAccountSearch = account.name.toLowerCase().includes(accountSearch.toLowerCase());
     
-    // If there's an explicit search, show the account even if it has 0 opportunities
+    // Apply general search filter (Name, Description, Industry, Website, Notes)
+    if (searchTerm.trim() !== '') {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesName = account.name?.toLowerCase().includes(searchLower) || false;
+      const matchesDescription = account.description?.toLowerCase().includes(searchLower) || false;
+      const matchesIndustry = account.industry?.toLowerCase().includes(searchLower) || false;
+      const matchesWebsite = account.website?.toLowerCase().includes(searchLower) || false;
+      const notesContent = accountNotes.get(account.id) || '';
+      const matchesNotes = notesContent.toLowerCase().includes(searchLower);
+      
+      return matchesName || matchesDescription || matchesIndustry || matchesWebsite || matchesNotes;
+    }
+    
+    // If there's an explicit account name search, show the account even if it has 0 opportunities
     if (accountSearch.trim() !== '') {
-      return matchesSearch;
+      return matchesAccountSearch;
     }
     
     // If no search, only show accounts with at least 1 visible opportunity
     const visibleOppCount = getVisibleOpportunityCount(account.id);
-    return matchesSearch && visibleOppCount > 0;
+    return matchesAccountSearch && visibleOppCount > 0;
   });
 
   if (loading) {
@@ -184,6 +234,20 @@ export function AccountList() {
         >
           My Accounts
         </button>
+      </div>
+
+      {/* Search field */}
+      <div className="mb-3">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by Name, Description, Industry, Website, Notes..."
+          className="w-full max-w-md px-3 py-2 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700"
+        />
+        {notesLoading && searchTerm.trim() && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Loading notes...</p>
+        )}
       </div>
       
       {/* Account search combo box */}
