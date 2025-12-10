@@ -485,6 +485,45 @@ function cleanEmailContent(text) {
     return cleaned;
 }
 /**
+ * Clean HTML email content while preserving HTML structure
+ * Removes quoted/replied sections but keeps HTML formatting
+ */
+function cleanEmailContentHtml(html) {
+    if (!html)
+        return '';
+    let cleaned = html;
+    // Remove quoted/replied content in blockquote tags
+    cleaned = cleaned.replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, '');
+    // Remove quoted content in divs with common quote classes
+    cleaned = cleaned.replace(/<div[^>]*class="[^"]*quote[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    // Remove "On [date] [person] wrote:" patterns (case-insensitive, multiline)
+    cleaned = cleaned.replace(/<p[^>]*>On\s+[\s\S]*?\s+wrote:[\s\S]*?<\/p>/gi, '');
+    cleaned = cleaned.replace(/On\s+[\s\S]*?\s+wrote:[\s\S]*?(?=<[^>]+>|$)/gi, '');
+    // Remove "From:" lines in thread history
+    cleaned = cleaned.replace(/<p[^>]*>From:\s+[\s\S]*?<\/p>/gi, '');
+    cleaned = cleaned.replace(/From:\s+[\s\S]*?(?=<[^>]+>|$)/gi, '');
+    // Remove "Sent:" lines in thread history
+    cleaned = cleaned.replace(/<p[^>]*>Sent:\s+[\s\S]*?<\/p>/gi, '');
+    cleaned = cleaned.replace(/Sent:\s+[\s\S]*?(?=<[^>]+>|$)/gi, '');
+    // Split by common delimiters and take the first meaningful part
+    const parts = cleaned.split(/<hr[^>]*>|<div[^>]*>--\s*<\/div>/i);
+    if (parts.length > 1) {
+        cleaned = parts[0].trim();
+    }
+    // Remove common signature patterns in HTML
+    const signaturePatterns = [
+        /<p[^>]*>(Best regards|Sincerely|Regards|Thanks|Thank you|Yours|Cheers|Best),?[\s\S]*$/i,
+        /<div[^>]*>(Best regards|Sincerely|Regards|Thanks|Thank you|Yours|Cheers|Best),?[\s\S]*$/i,
+    ];
+    for (const pattern of signaturePatterns) {
+        const match = cleaned.match(pattern);
+        if (match && match.index !== undefined) {
+            cleaned = cleaned.substring(0, match.index).trim();
+        }
+    }
+    return cleaned.trim();
+}
+/**
  * Extract HTML text content (strip HTML tags)
  */
 function extractTextFromHtml(html) {
@@ -552,6 +591,89 @@ async function isContentAlreadyProcessed(content, threadId) {
     catch (error) {
         functions.logger.error('Error checking if content already processed:', error);
         return false;
+    }
+}
+/**
+ * Extract only new content from email thread (content not seen in previous emails)
+ */
+async function extractNewThreadContent(emailContent, htmlContent, threadId) {
+    var _a, _b;
+    if (!threadId || !emailContent) {
+        return { newContent: emailContent, newHtmlContent: htmlContent };
+    }
+    try {
+        // Get all processed emails in this thread (excluding current)
+        const emailsSnapshot = await db.collection('inboundEmails')
+            .where('threadId', '==', threadId)
+            .where('processed', '==', true)
+            .orderBy('receivedAt', 'desc')
+            .get();
+        if (emailsSnapshot.empty) {
+            return { newContent: emailContent, newHtmlContent: htmlContent };
+        }
+        // Get all previous email contents from the thread
+        const previousContents = [];
+        for (const emailDoc of emailsSnapshot.docs) {
+            const emailData = emailDoc.data();
+            const prevHtml = ((_a = emailData.body) === null || _a === void 0 ? void 0 : _a.html) || '';
+            const prevText = ((_b = emailData.body) === null || _b === void 0 ? void 0 : _b.text) || '';
+            const prevContent = prevText || extractTextFromHtml(prevHtml);
+            if (prevContent) {
+                previousContents.push(cleanEmailContent(prevContent));
+            }
+        }
+        // Find the longest matching suffix (common thread content)
+        let longestMatch = '';
+        const emailContentCleaned = cleanEmailContent(emailContent);
+        for (const prevContent of previousContents) {
+            // Check if current content ends with previous content (thread continuation)
+            if (emailContentCleaned.length >= prevContent.length) {
+                const suffix = emailContentCleaned.substring(emailContentCleaned.length - prevContent.length);
+                const similarity = calculateSimilarity(suffix, prevContent);
+                if (similarity > 0.85 && prevContent.length > longestMatch.length) {
+                    longestMatch = prevContent;
+                }
+            }
+        }
+        // Extract new content (remove the matching thread portion)
+        let newContent = emailContentCleaned;
+        let newHtmlContent = htmlContent;
+        if (longestMatch.length > 50) {
+            // Find where the new content starts
+            const matchIndex = emailContentCleaned.lastIndexOf(longestMatch.substring(0, Math.min(100, longestMatch.length)));
+            if (matchIndex > 0 && matchIndex < emailContentCleaned.length * 0.7) {
+                // Only take the first part (new content)
+                newContent = emailContentCleaned.substring(0, matchIndex).trim();
+                // For HTML, try to extract new content similarly
+                if (htmlContent) {
+                    // Remove quoted/replied sections which typically contain previous thread content
+                    const cleanedHtml = cleanEmailContentHtml(htmlContent);
+                    // If cleaned HTML is significantly shorter, use it
+                    if (cleanedHtml.length < htmlContent.length * 0.8) {
+                        newHtmlContent = cleanedHtml;
+                    }
+                    else {
+                        // Try to find and remove the matching portion
+                        const htmlText = extractTextFromHtml(htmlContent);
+                        const htmlMatchIndex = htmlText.lastIndexOf(longestMatch.substring(0, Math.min(100, longestMatch.length)));
+                        if (htmlMatchIndex > 0 && htmlMatchIndex < htmlText.length * 0.7) {
+                            // Extract HTML up to the match point (approximate)
+                            newHtmlContent = htmlContent.substring(0, Math.floor(htmlContent.length * (htmlMatchIndex / htmlText.length))).trim();
+                        }
+                    }
+                }
+            }
+        }
+        // If new content is too short, use original (might be a new thread)
+        if (newContent.length < 20) {
+            return { newContent: emailContentCleaned, newHtmlContent: htmlContent };
+        }
+        functions.logger.info(`📧 Extracted new thread content: ${newContent.length} chars (from ${emailContentCleaned.length} total)`);
+        return { newContent, newHtmlContent };
+    }
+    catch (error) {
+        functions.logger.error('Error extracting new thread content:', error);
+        return { newContent: emailContent, newHtmlContent: htmlContent };
     }
 }
 /**
@@ -1163,7 +1285,7 @@ async function addAuditMessage(emailDoc, status, message, details) {
     }
 }
 async function processEmail(emailDoc, createdBy) {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     try {
         const email = emailDoc.data();
         if (!email) {
@@ -1269,6 +1391,7 @@ async function processEmail(emailDoc, createdBy) {
             // Could add special parsing logic for internal emails here if needed
         }
         // Get email content - use original content if this was a forwarded email
+        // Get content for analysis (plain text)
         let content;
         if (originalEmailContent) {
             // Use the extracted original email content
@@ -1281,8 +1404,62 @@ async function processEmail(emailDoc, createdBy) {
             const textContent = ((_f = processedEmail.body) === null || _f === void 0 ? void 0 : _f.text) || '';
             content = textContent || extractTextFromHtml(htmlContent);
         }
-        // Clean content
+        // Clean content for analysis
         content = cleanEmailContent(content);
+        // Get HTML content for note storage (preserve formatting)
+        // For forwarded emails, use the original HTML content (not the forwarding wrapper)
+        let htmlContentForNote = '';
+        if (originalEmailContent) {
+            // For forwarded emails, get the original HTML if available
+            // The originalEmailContent is plain text, so we need to find the HTML version
+            // Try to extract HTML from the original forwarded section
+            const htmlContent = ((_g = processedEmail.body) === null || _g === void 0 ? void 0 : _g.html) || '';
+            if (htmlContent) {
+                // Extract HTML content from the forwarded section (not the wrapper)
+                // Look for the forwarded section in HTML
+                const forwardedSeparators = [
+                    /<blockquote[^>]*>[\s\S]*?-----Original Message-----[\s\S]*?<\/blockquote>/i,
+                    /<div[^>]*>[\s\S]*?-----Original Message-----[\s\S]*?<\/div>/i,
+                    /-----Original Message-----[\s\S]*/i,
+                ];
+                let forwardedHtmlSection = htmlContent;
+                for (const separator of forwardedSeparators) {
+                    const match = htmlContent.match(separator);
+                    if (match && match.index !== undefined) {
+                        // Extract content before the separator (original forwarded email HTML)
+                        forwardedHtmlSection = htmlContent.substring(0, match.index);
+                        break;
+                    }
+                }
+                // If we found a forwarded section, use it; otherwise use the original content as HTML
+                if (forwardedHtmlSection !== htmlContent && forwardedHtmlSection.trim().length > 50) {
+                    htmlContentForNote = forwardedHtmlSection;
+                }
+                else {
+                    // Convert originalEmailContent to HTML (it's plain text)
+                    htmlContentForNote = originalEmailContent.replace(/\n/g, '<br>');
+                }
+            }
+            else {
+                // No HTML available, convert plain text to HTML
+                htmlContentForNote = originalEmailContent.replace(/\n/g, '<br>');
+            }
+        }
+        else {
+            // Prefer HTML, fallback to text
+            htmlContentForNote = ((_h = processedEmail.body) === null || _h === void 0 ? void 0 : _h.html) || ((_j = processedEmail.body) === null || _j === void 0 ? void 0 : _j.text) || '';
+        }
+        // Clean HTML content (remove quoted/replied sections but preserve HTML structure)
+        // Do NOT include forwarding wrapper content in the note
+        if (htmlContentForNote) {
+            htmlContentForNote = cleanEmailContentHtml(htmlContentForNote);
+        }
+        // For thread emails, extract only new content (not the entire thread)
+        if (email.threadId) {
+            const threadContent = await extractNewThreadContent(content, htmlContentForNote, email.threadId);
+            content = threadContent.newContent;
+            htmlContentForNote = threadContent.newHtmlContent || htmlContentForNote;
+        }
         if (!content || content.trim().length < 10) {
             functions.logger.info(`⏭️  Skipping email with insufficient content: ${email.subject}`);
             await addAuditMessage(emailDoc, 'skipped', 'Email skipped: insufficient content after cleaning', { contentLength: (content === null || content === void 0 ? void 0 : content.trim().length) || 0 });
@@ -1538,8 +1715,22 @@ async function processEmail(emailDoc, createdBy) {
                 await addAuditMessage(emailDoc, 'success', `Created ${tasksCreated} task(s) from action items`, { tasksCreated, totalActionItems: extractedData.actionItems.length });
             }
         }
-        // Create note with email content
-        const noteContent = `Email from ${((_g = processedEmail.from) === null || _g === void 0 ? void 0 : _g.name) || ((_h = processedEmail.from) === null || _h === void 0 ? void 0 : _h.email) || 'Unknown'}\n\n${content}`;
+        // Create note with email content (preserve HTML formatting)
+        // Do NOT include forwarding wrapper content (Account:/Opportunity: patterns) in the note
+        const emailHeader = `<p><strong>Email from</strong> ${((_k = processedEmail.from) === null || _k === void 0 ? void 0 : _k.name) || ((_l = processedEmail.from) === null || _l === void 0 ? void 0 : _l.email) || 'Unknown'}</p>`;
+        let noteContent = '';
+        if (htmlContentForNote && htmlContentForNote.trim().length > 0) {
+            // Use HTML content (already cleaned, forwarding wrapper removed)
+            noteContent = `${emailHeader}\n${htmlContentForNote}`;
+        }
+        else if (content && content.trim().length > 0) {
+            // Fallback to plain text converted to HTML
+            noteContent = `${emailHeader}\n<p>${content.replace(/\n/g, '<br>')}</p>`;
+        }
+        else {
+            // Minimal content
+            noteContent = emailHeader;
+        }
         const noteData = {
             content: noteContent,
             opportunityId,

@@ -643,6 +643,101 @@ async function isContentAlreadyProcessed(content: string, threadId?: string): Pr
 }
 
 /**
+ * Extract only new content from email thread (content not seen in previous emails)
+ */
+async function extractNewThreadContent(
+  emailContent: string,
+  htmlContent: string,
+  threadId?: string
+): Promise<{ newContent: string; newHtmlContent: string }> {
+  if (!threadId || !emailContent) {
+    return { newContent: emailContent, newHtmlContent: htmlContent };
+  }
+
+  try {
+    // Get all processed emails in this thread (excluding current)
+    const emailsSnapshot = await db.collection('inboundEmails')
+      .where('threadId', '==', threadId)
+      .where('processed', '==', true)
+      .orderBy('receivedAt', 'desc')
+      .get();
+
+    if (emailsSnapshot.empty) {
+      return { newContent: emailContent, newHtmlContent: htmlContent };
+    }
+
+    // Get all previous email contents from the thread
+    const previousContents: string[] = [];
+    for (const emailDoc of emailsSnapshot.docs) {
+      const emailData = emailDoc.data();
+      const prevHtml = emailData.body?.html || '';
+      const prevText = emailData.body?.text || '';
+      const prevContent = prevText || extractTextFromHtml(prevHtml);
+      if (prevContent) {
+        previousContents.push(cleanEmailContent(prevContent));
+      }
+    }
+
+    // Find the longest matching suffix (common thread content)
+    let longestMatch = '';
+    const emailContentCleaned = cleanEmailContent(emailContent);
+    
+    for (const prevContent of previousContents) {
+      // Check if current content ends with previous content (thread continuation)
+      if (emailContentCleaned.length >= prevContent.length) {
+        const suffix = emailContentCleaned.substring(emailContentCleaned.length - prevContent.length);
+        const similarity = calculateSimilarity(suffix, prevContent);
+        if (similarity > 0.85 && prevContent.length > longestMatch.length) {
+          longestMatch = prevContent;
+        }
+      }
+    }
+
+    // Extract new content (remove the matching thread portion)
+    let newContent = emailContentCleaned;
+    let newHtmlContent = htmlContent;
+
+    if (longestMatch.length > 50) {
+      // Find where the new content starts
+      const matchIndex = emailContentCleaned.lastIndexOf(longestMatch.substring(0, Math.min(100, longestMatch.length)));
+      if (matchIndex > 0 && matchIndex < emailContentCleaned.length * 0.7) {
+        // Only take the first part (new content)
+        newContent = emailContentCleaned.substring(0, matchIndex).trim();
+        
+        // For HTML, try to extract new content similarly
+        if (htmlContent) {
+          // Remove quoted/replied sections which typically contain previous thread content
+          const cleanedHtml = cleanEmailContentHtml(htmlContent);
+          // If cleaned HTML is significantly shorter, use it
+          if (cleanedHtml.length < htmlContent.length * 0.8) {
+            newHtmlContent = cleanedHtml;
+          } else {
+            // Try to find and remove the matching portion
+            const htmlText = extractTextFromHtml(htmlContent);
+            const htmlMatchIndex = htmlText.lastIndexOf(longestMatch.substring(0, Math.min(100, longestMatch.length)));
+            if (htmlMatchIndex > 0 && htmlMatchIndex < htmlText.length * 0.7) {
+              // Extract HTML up to the match point (approximate)
+              newHtmlContent = htmlContent.substring(0, Math.floor(htmlContent.length * (htmlMatchIndex / htmlText.length))).trim();
+            }
+          }
+        }
+      }
+    }
+
+    // If new content is too short, use original (might be a new thread)
+    if (newContent.length < 20) {
+      return { newContent: emailContentCleaned, newHtmlContent: htmlContent };
+    }
+
+    functions.logger.info(`📧 Extracted new thread content: ${newContent.length} chars (from ${emailContentCleaned.length} total)`);
+    return { newContent, newHtmlContent };
+  } catch (error) {
+    functions.logger.error('Error extracting new thread content:', error);
+    return { newContent: emailContent, newHtmlContent: htmlContent };
+  }
+}
+
+/**
  * Simple similarity calculation (Jaccard similarity on words)
  */
 function calculateSimilarity(text1: string, text2: string): number {
@@ -1511,19 +1606,59 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     content = cleanEmailContent(content);
     
     // Get HTML content for note storage (preserve formatting)
+    // For forwarded emails, use the original HTML content (not the forwarding wrapper)
     let htmlContentForNote: string = '';
     if (originalEmailContent) {
-      // For forwarded emails, try to preserve HTML if available
-      // Otherwise use the original content as-is (may be plain text)
-      htmlContentForNote = processedEmail.body?.html || originalEmailContent;
+      // For forwarded emails, get the original HTML if available
+      // The originalEmailContent is plain text, so we need to find the HTML version
+      // Try to extract HTML from the original forwarded section
+      const htmlContent = processedEmail.body?.html || '';
+      if (htmlContent) {
+        // Extract HTML content from the forwarded section (not the wrapper)
+        // Look for the forwarded section in HTML
+        const forwardedSeparators = [
+          /<blockquote[^>]*>[\s\S]*?-----Original Message-----[\s\S]*?<\/blockquote>/i,
+          /<div[^>]*>[\s\S]*?-----Original Message-----[\s\S]*?<\/div>/i,
+          /-----Original Message-----[\s\S]*/i,
+        ];
+        
+        let forwardedHtmlSection = htmlContent;
+        for (const separator of forwardedSeparators) {
+          const match = htmlContent.match(separator);
+          if (match && match.index !== undefined) {
+            // Extract content before the separator (original forwarded email HTML)
+            forwardedHtmlSection = htmlContent.substring(0, match.index);
+            break;
+          }
+        }
+        
+        // If we found a forwarded section, use it; otherwise use the original content as HTML
+        if (forwardedHtmlSection !== htmlContent && forwardedHtmlSection.trim().length > 50) {
+          htmlContentForNote = forwardedHtmlSection;
+        } else {
+          // Convert originalEmailContent to HTML (it's plain text)
+          htmlContentForNote = originalEmailContent.replace(/\n/g, '<br>');
+        }
+      } else {
+        // No HTML available, convert plain text to HTML
+        htmlContentForNote = originalEmailContent.replace(/\n/g, '<br>');
+      }
     } else {
       // Prefer HTML, fallback to text
       htmlContentForNote = processedEmail.body?.html || processedEmail.body?.text || '';
     }
     
     // Clean HTML content (remove quoted/replied sections but preserve HTML structure)
+    // Do NOT include forwarding wrapper content in the note
     if (htmlContentForNote) {
       htmlContentForNote = cleanEmailContentHtml(htmlContentForNote);
+    }
+    
+    // For thread emails, extract only new content (not the entire thread)
+    if (email.threadId) {
+      const threadContent = await extractNewThreadContent(content, htmlContentForNote, email.threadId);
+      content = threadContent.newContent;
+      htmlContentForNote = threadContent.newHtmlContent || htmlContentForNote;
     }
     
     if (!content || content.trim().length < 10) {
@@ -1812,10 +1947,20 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     }
     
     // Create note with email content (preserve HTML formatting)
+    // Do NOT include forwarding wrapper content (Account:/Opportunity: patterns) in the note
     const emailHeader = `<p><strong>Email from</strong> ${processedEmail.from?.name || processedEmail.from?.email || 'Unknown'}</p>`;
-    const noteContent = htmlContentForNote 
-      ? `${emailHeader}\n${htmlContentForNote}`
-      : `<p>Email from ${processedEmail.from?.name || processedEmail.from?.email || 'Unknown'}</p><p>${content.replace(/\n/g, '<br>')}</p>`;
+    let noteContent = '';
+    
+    if (htmlContentForNote && htmlContentForNote.trim().length > 0) {
+      // Use HTML content (already cleaned, forwarding wrapper removed)
+      noteContent = `${emailHeader}\n${htmlContentForNote}`;
+    } else if (content && content.trim().length > 0) {
+      // Fallback to plain text converted to HTML
+      noteContent = `${emailHeader}\n<p>${content.replace(/\n/g, '<br>')}</p>`;
+    } else {
+      // Minimal content
+      noteContent = emailHeader;
+    }
     
     const noteData = {
       content: noteContent,
