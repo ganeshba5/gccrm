@@ -216,9 +216,12 @@ export function NoteView() {
                 Private
               </span>
             )}
-            {note.source && (
-              <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 rounded">
-                Source: {note.source}
+            {note.source === 'email' && (
+              <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 rounded flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Generated from Email
               </span>
             )}
           </div>
@@ -327,7 +330,7 @@ export function NoteView() {
               </div>
             )}
 
-            {user && note.createdBy === user.id && (
+            {user && note.createdBy === user.id && note.source !== 'email' && (
               <div className="flex items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
@@ -336,6 +339,13 @@ export function NoteView() {
                 >
                   Edit
                 </button>
+              </div>
+            )}
+            {note.source === 'email' && (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                  This note was automatically generated from an email and cannot be edited.
+                </p>
               </div>
             )}
           </div>

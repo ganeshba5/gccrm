@@ -840,7 +840,7 @@ export function AccountForm() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-4">
-                          {user && note.createdBy === user.id && !isReadOnly && (
+                          {user && note.createdBy === user.id && !isReadOnly && note.source !== 'email' && (
                             <>
                               <button
                                 onClick={() => handleEditNote(note)}

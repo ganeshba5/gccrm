@@ -678,7 +678,7 @@ export function ContactForm() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-4">
-                          {user && note.createdBy === user.id && (
+                          {user && note.createdBy === user.id && note.source !== 'email' && (
                             <>
                               <button
                                 onClick={() => handleEditNote(note)}

@@ -517,6 +517,55 @@ function cleanEmailContent(text: string): string {
 }
 
 /**
+ * Clean HTML email content while preserving HTML structure
+ * Removes quoted/replied sections but keeps HTML formatting
+ */
+function cleanEmailContentHtml(html: string): string {
+  if (!html) return '';
+  
+  let cleaned = html;
+  
+  // Remove quoted/replied content in blockquote tags
+  cleaned = cleaned.replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, '');
+  
+  // Remove quoted content in divs with common quote classes
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*quote[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  
+  // Remove "On [date] [person] wrote:" patterns (case-insensitive, multiline)
+  cleaned = cleaned.replace(/<p[^>]*>On\s+[\s\S]*?\s+wrote:[\s\S]*?<\/p>/gi, '');
+  cleaned = cleaned.replace(/On\s+[\s\S]*?\s+wrote:[\s\S]*?(?=<[^>]+>|$)/gi, '');
+  
+  // Remove "From:" lines in thread history
+  cleaned = cleaned.replace(/<p[^>]*>From:\s+[\s\S]*?<\/p>/gi, '');
+  cleaned = cleaned.replace(/From:\s+[\s\S]*?(?=<[^>]+>|$)/gi, '');
+  
+  // Remove "Sent:" lines in thread history
+  cleaned = cleaned.replace(/<p[^>]*>Sent:\s+[\s\S]*?<\/p>/gi, '');
+  cleaned = cleaned.replace(/Sent:\s+[\s\S]*?(?=<[^>]+>|$)/gi, '');
+  
+  // Split by common delimiters and take the first meaningful part
+  const parts = cleaned.split(/<hr[^>]*>|<div[^>]*>--\s*<\/div>/i);
+  if (parts.length > 1) {
+    cleaned = parts[0].trim();
+  }
+  
+  // Remove common signature patterns in HTML
+  const signaturePatterns = [
+    /<p[^>]*>(Best regards|Sincerely|Regards|Thanks|Thank you|Yours|Cheers|Best),?[\s\S]*$/i,
+    /<div[^>]*>(Best regards|Sincerely|Regards|Thanks|Thank you|Yours|Cheers|Best),?[\s\S]*$/i,
+  ];
+  
+  for (const pattern of signaturePatterns) {
+    const match = cleaned.match(pattern);
+    if (match && match.index !== undefined) {
+      cleaned = cleaned.substring(0, match.index).trim();
+    }
+  }
+  
+  return cleaned.trim();
+}
+
+/**
  * Extract HTML text content (strip HTML tags)
  */
 function extractTextFromHtml(html: string): string {
@@ -1445,6 +1494,7 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
     }
     
     // Get email content - use original content if this was a forwarded email
+    // Get content for analysis (plain text)
     let content: string;
     if (originalEmailContent) {
       // Use the extracted original email content
@@ -1457,8 +1507,24 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       content = textContent || extractTextFromHtml(htmlContent);
     }
     
-    // Clean content
+    // Clean content for analysis
     content = cleanEmailContent(content);
+    
+    // Get HTML content for note storage (preserve formatting)
+    let htmlContentForNote: string = '';
+    if (originalEmailContent) {
+      // For forwarded emails, try to preserve HTML if available
+      // Otherwise use the original content as-is (may be plain text)
+      htmlContentForNote = processedEmail.body?.html || originalEmailContent;
+    } else {
+      // Prefer HTML, fallback to text
+      htmlContentForNote = processedEmail.body?.html || processedEmail.body?.text || '';
+    }
+    
+    // Clean HTML content (remove quoted/replied sections but preserve HTML structure)
+    if (htmlContentForNote) {
+      htmlContentForNote = cleanEmailContentHtml(htmlContentForNote);
+    }
     
     if (!content || content.trim().length < 10) {
       functions.logger.info(`⏭️  Skipping email with insufficient content: ${email.subject}`);
@@ -1745,8 +1811,11 @@ async function processEmail(emailDoc: admin.firestore.DocumentSnapshot, createdB
       }
     }
     
-    // Create note with email content
-    const noteContent = `Email from ${processedEmail.from?.name || processedEmail.from?.email || 'Unknown'}\n\n${content}`;
+    // Create note with email content (preserve HTML formatting)
+    const emailHeader = `<p><strong>Email from</strong> ${processedEmail.from?.name || processedEmail.from?.email || 'Unknown'}</p>`;
+    const noteContent = htmlContentForNote 
+      ? `${emailHeader}\n${htmlContentForNote}`
+      : `<p>Email from ${processedEmail.from?.name || processedEmail.from?.email || 'Unknown'}</p><p>${content.replace(/\n/g, '<br>')}</p>`;
     
     const noteData = {
       content: noteContent,
