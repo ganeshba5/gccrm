@@ -265,6 +265,64 @@ class InboundEmailService {
     }
   }
 
+  async getByNoteId(noteId: string, emailId?: string): Promise<InboundEmail | null> {
+    try {
+      await ensureAuthenticated();
+
+      // If emailId is provided (stored directly in note), use direct lookup (fastest and most reliable)
+      if (emailId) {
+        console.log(`Using direct emailId lookup: ${emailId}`);
+        const email = await this.getById(emailId);
+        if (email) {
+          console.log(`Found email via direct lookup: ${email.id}`);
+          return email;
+        }
+        console.warn(`Email not found with direct ID: ${emailId}`);
+      }
+
+      // Fallback: Try reverse lookup via linkedTo.noteId
+      console.log(`Attempting reverse lookup for noteId: ${noteId}`);
+      const q = query(
+        this.emailsRef,
+        where('linkedTo.noteId', '==', noteId)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        console.warn(`No email found with linkedTo.noteId == "${noteId}"`);
+        // Try alternative query structure in case linkedTo is stored differently
+        // Some Firestore queries might need the field path to be structured differently
+        const allEmails = await this.getAll(1000); // Get a reasonable number to search
+        const matchingEmail = allEmails.find(email => email.linkedTo?.noteId === noteId);
+        if (matchingEmail) {
+          console.log(`Found email via fallback search: ${matchingEmail.id}`);
+          return matchingEmail;
+        }
+        console.warn(`Fallback search also found no email for noteId: "${noteId}"`);
+        return null;
+      }
+
+      // Return the first matching email (should typically be only one)
+      const email = this.convertToInboundEmail(querySnapshot.docs[0] as DocumentSnapshot);
+      console.log(`Found email for noteId "${noteId}": ${email.id}`);
+      return email;
+    } catch (error) {
+      console.error('Error getting inbound email by note ID:', error);
+      // Try fallback search on error
+      try {
+        const allEmails = await this.getAll(1000);
+        const matchingEmail = allEmails.find(email => email.linkedTo?.noteId === noteId);
+        if (matchingEmail) {
+          console.log(`Found email via fallback search after error: ${matchingEmail.id}`);
+          return matchingEmail;
+        }
+      } catch (fallbackError) {
+        console.error('Fallback search also failed:', fallbackError);
+      }
+      throw error;
+    }
+  }
+
   private convertToInboundEmail(doc: DocumentSnapshot): InboundEmail {
     const data = doc.data();
     return {

@@ -846,6 +846,10 @@ async function findOrCreateOpportunity(opportunityName, accountId, createdBy, ro
             return bestMatch.id;
         }
         // No match found, create new opportunity
+        // Calculate default close date: 6 months from today
+        const today = new Date();
+        const sixMonthsFromToday = new Date(today);
+        sixMonthsFromToday.setMonth(today.getMonth() + 6);
         const opportunityData = {
             name: trimmedName,
             accountId,
@@ -853,6 +857,7 @@ async function findOrCreateOpportunity(opportunityName, accountId, createdBy, ro
             owner: createdBy,
             createdBy,
             source: 'email', // Mark as created from email processing
+            expectedCloseDate: admin.firestore.Timestamp.fromDate(sixMonthsFromToday),
             createdAt: admin.firestore.Timestamp.now(),
             updatedAt: admin.firestore.Timestamp.now(),
         };
@@ -864,7 +869,7 @@ async function findOrCreateOpportunity(opportunityName, accountId, createdBy, ro
             opportunityData.routingConfidence = routingConfidence;
         }
         const docRef = await opportunitiesRef.add(opportunityData);
-        functions.logger.info(`✅ Created new opportunity: ${trimmedName} for account ${accountId}`);
+        functions.logger.info(`✅ Created new opportunity: ${trimmedName} for account ${accountId} with close date: ${sixMonthsFromToday.toISOString()}`);
         return docRef.id;
     }
     catch (error) {
@@ -1737,6 +1742,7 @@ async function processEmail(emailDoc, createdBy) {
             accountId,
             createdBy,
             source: 'email', // Mark as created from email processing
+            emailId: emailDoc.id, // Store email ID for direct lookup (avoids reverse query issues)
             createdAt: admin.firestore.Timestamp.now(),
             updatedAt: admin.firestore.Timestamp.now(),
         };

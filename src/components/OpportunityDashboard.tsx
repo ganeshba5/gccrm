@@ -35,8 +35,18 @@ export default function OpportunityDashboard() {
   const [ownerSearch, setOwnerSearch] = useState<string>('');
   const [ownerFocused, setOwnerFocused] = useState<boolean>(false);
   const [opportunityFilter, setOpportunityFilter] = useState<'all' | 'my'>(() => {
+    // First check URL params
     const filter = searchParams.get('filter');
-    return (filter === 'my' || filter === 'all') ? filter : 'my';
+    if (filter === 'my' || filter === 'all') {
+      return filter;
+    }
+    // Then check localStorage for previous choice
+    const saved = localStorage.getItem('opportunities_filter');
+    if (saved === 'my' || saved === 'all') {
+      return saved;
+    }
+    // First time: default to 'my'
+    return 'my';
   });
   const [searchTerm, setSearchTerm] = useState<string>(() => {
     return searchParams.get('search') || '';
@@ -112,6 +122,11 @@ export default function OpportunityDashboard() {
   useEffect(() => {
     localStorage.setItem('opportunities_customEndDate', customEndDate);
   }, [customEndDate]);
+
+  // Save opportunity filter to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('opportunities_filter', opportunityFilter);
+  }, [opportunityFilter]);
 
   const fetchAccounts = async () => {
     try {

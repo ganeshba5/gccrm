@@ -12,12 +12,15 @@ import { noteService } from '../services/noteService';
 import { taskService } from '../services/taskService';
 import { contactService } from '../services/contactService';
 import { userService } from '../services/userService';
+import { inboundEmailService } from '../services/inboundEmailService';
 import { useAuth } from '../context/AuthContext';
 import { canAccessAllData } from '../lib/auth-helpers';
 import DatePicker from './DatePicker';
 import { RichTextEditor } from './RichTextEditor';
 import { NoteContent } from './NoteContent';
 import { SharedUsersManager } from './SharedUsersManager';
+import EmailDetailModal from './EmailDetailModal';
+import type { InboundEmail } from '../types/inboundEmail';
 
 const initialFormData: AccountFormData = {
   name: '',
@@ -60,6 +63,8 @@ export function AccountForm() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<InboundEmail | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [isCreatingContact, setIsCreatingContact] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -343,11 +348,36 @@ export function AccountForm() {
   };
 
 
-  const handleViewNote = (note: Note) => {
-    const accountId = id || '';
-    navigate(`/notes/${note.id}/view`, { 
-      state: { returnPath: `/accounts/${accountId}/edit` } 
-    });
+  const handleViewNote = async (note: Note) => {
+    // For email-generated notes, show the corresponding email
+    if (note.source === 'email') {
+      try {
+        const email = await inboundEmailService.getByNoteId(note.id, note.emailId);
+        if (email) {
+          setSelectedEmail(email);
+          setIsEmailModalOpen(true);
+        } else {
+          // Fallback to note view if email not found
+          const accountId = id || '';
+          navigate(`/notes/${note.id}/view`, { 
+            state: { returnPath: `/accounts/${accountId}/edit` } 
+          });
+        }
+      } catch (error) {
+        console.error('Error loading email for note:', error);
+        // Fallback to note view on error
+        const accountId = id || '';
+        navigate(`/notes/${note.id}/view`, { 
+          state: { returnPath: `/accounts/${accountId}/edit` } 
+        });
+      }
+    } else {
+      // Regular notes: navigate to note view
+      const accountId = id || '';
+      navigate(`/notes/${note.id}/view`, { 
+        state: { returnPath: `/accounts/${accountId}/edit` } 
+      });
+    }
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -1303,6 +1333,18 @@ export function AccountForm() {
         )}
       </div>
     </div>
+    
+    {/* Email Detail Modal */}
+    {selectedEmail && (
+      <EmailDetailModal
+        email={selectedEmail}
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setSelectedEmail(null);
+        }}
+      />
+    )}
     </>
   );
 }

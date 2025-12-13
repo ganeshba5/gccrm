@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { noteService } from '../services/noteService';
+import { inboundEmailService } from '../services/inboundEmailService';
 import { useAuth } from '../context/AuthContext';
 import type { Note } from '../types/note';
 import { userService } from '../services/userService';
 import type { User } from '../types/user';
+import EmailDetailModal from './EmailDetailModal';
+import type { InboundEmail } from '../types/inboundEmail';
 
 type EntityType = 'opportunity' | 'account' | 'contact';
 
@@ -39,6 +42,8 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<InboundEmail | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   useEffect(() => {
     if (entityId && entityType) {
@@ -126,6 +131,21 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
     setEditingNoteId(note.id);
     setEditNoteContent(note.content);
     setEditIsPrivate(note.isPrivate || false);
+  };
+
+  const handleViewNote = async (note: Note) => {
+    // For email-generated notes, show the corresponding email
+    if (note.source === 'email') {
+      try {
+        const email = await inboundEmailService.getByNoteId(note.id, note.emailId);
+        if (email) {
+          setSelectedEmail(email);
+          setIsEmailModalOpen(true);
+        }
+      } catch (error) {
+        console.error('Error loading email for note:', error);
+      }
+    }
   };
 
   const handleUpdateNote = async (e: React.FormEvent) => {
@@ -428,7 +448,7 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
                       )}
                     </div>
                     <div className="col-span-1 flex items-center justify-end gap-1">
-                      {user && note.createdBy === user.id && (
+                      {user && note.createdBy === user.id && note.source !== 'email' && (
                         <>
                           <button
                             onClick={() => handleEditNote(note)}
@@ -450,6 +470,18 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
                           </button>
                         </>
                       )}
+                      {note.source === 'email' && (
+                        <button
+                          onClick={() => handleViewNote(note)}
+                          className="p-1.5 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition-colors"
+                          title="View email"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -458,6 +490,18 @@ function EntityNotesPage({ entityType, entityId }: { entityType: EntityType; ent
           </>
         )}
       </div>
+      
+      {/* Email Detail Modal */}
+      {selectedEmail && (
+        <EmailDetailModal
+          email={selectedEmail}
+          isOpen={isEmailModalOpen}
+          onClose={() => {
+            setIsEmailModalOpen(false);
+            setSelectedEmail(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -9,11 +9,14 @@ import { accountService } from '../services/accountService';
 import { noteService } from '../services/noteService';
 import { taskService } from '../services/taskService';
 import { userService } from '../services/userService';
+import { inboundEmailService } from '../services/inboundEmailService';
 import type { Account } from '../types/account';
 import { useAuth } from '../context/AuthContext';
 import DatePicker from './DatePicker';
 import { RichTextEditor } from './RichTextEditor';
 import { NoteContent } from './NoteContent';
+import EmailDetailModal from './EmailDetailModal';
+import type { InboundEmail } from '../types/inboundEmail';
 
 const initialFormData: ContactFormData = {
   firstName: '',
@@ -22,6 +25,7 @@ const initialFormData: ContactFormData = {
   email: '',
   phone: '',
   mobile: '',
+  linkedin: '',
   title: '',
   department: '',
   isPrimary: false,
@@ -44,6 +48,8 @@ export function ContactForm() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<InboundEmail | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteAttachments, setNewNoteAttachments] = useState<NoteAttachment[]>([]);
@@ -107,6 +113,7 @@ export function ContactForm() {
           email: contact.email || '',
           phone: contact.phone || '',
           mobile: contact.mobile || '',
+          linkedin: contact.linkedin || '',
           title: contact.title || '',
           department: contact.department || '',
           isPrimary: contact.isPrimary || false,
@@ -175,6 +182,7 @@ export function ContactForm() {
         email: formData.email?.trim() || undefined,
         phone: formData.phone?.trim() || undefined,
         mobile: formData.mobile?.trim() || undefined,
+        linkedin: formData.linkedin?.trim() || undefined,
         title: formData.title?.trim() || undefined,
         department: formData.department?.trim() || undefined,
       };
@@ -282,6 +290,47 @@ export function ContactForm() {
     }
   };
 
+  const handleViewNote = async (note: Note) => {
+    // For email-generated notes, show the corresponding email
+    if (note.source === 'email') {
+      try {
+        const email = await inboundEmailService.getByNoteId(note.id, note.emailId);
+        if (email) {
+          setSelectedEmail(email);
+          setIsEmailModalOpen(true);
+        } else {
+          // Fallback to note view if email not found
+          if (id) {
+            navigate(`/notes/${note.id}/view`, { 
+              state: { returnPath: `/contacts/${id}/edit` } 
+            });
+          } else {
+            navigate(`/notes/${note.id}/view`);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading email for note:', error);
+        // Fallback to note view on error
+        if (id) {
+          navigate(`/notes/${note.id}/view`, { 
+            state: { returnPath: `/contacts/${id}/edit` } 
+          });
+        } else {
+          navigate(`/notes/${note.id}/view`);
+        }
+      }
+    } else {
+      // Regular notes: navigate to note view
+      if (id) {
+        navigate(`/notes/${note.id}/view`, { 
+          state: { returnPath: `/contacts/${id}/edit` } 
+        });
+      } else {
+        navigate(`/notes/${note.id}/view`);
+      }
+    }
+  };
+
 
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm('Are you sure you want to delete this note?')) return;
@@ -354,6 +403,7 @@ export function ContactForm() {
   }
 
   return (
+    <>
     <div className="p-6">
       <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
@@ -507,19 +557,35 @@ export function ContactForm() {
             </div>
           </div>
 
-          {/* Line 5: Department - Label and Field */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="department" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-              Department:
-            </label>
-            <input
-              type="text"
-              id="department"
-              name="department"
-              value={formData.department || ''}
-              onChange={handleInputChange}
-              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
-            />
+          {/* Line 5: LinkedIn, Department - Label and Field in one line */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="linkedin" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                LinkedIn:
+              </label>
+              <input
+                type="url"
+                id="linkedin"
+                name="linkedin"
+                value={formData.linkedin || ''}
+                onChange={handleInputChange}
+                placeholder="https://linkedin.com/in/..."
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="department" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                Department:
+              </label>
+              <input
+                type="text"
+                id="department"
+                name="department"
+                value={formData.department || ''}
+                onChange={handleInputChange}
+                className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+              />
+            </div>
           </div>
 
           <div>
@@ -699,6 +765,18 @@ export function ContactForm() {
                                 </svg>
                               </button>
                             </>
+                          )}
+                          {note.source === 'email' && (
+                            <button
+                              onClick={() => handleViewNote(note)}
+                              className="p-1.5 text-gray-500 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded transition-colors"
+                              title="View email"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -900,6 +978,19 @@ export function ContactForm() {
         )}
       </div>
     </div>
+    
+    {/* Email Detail Modal */}
+    {selectedEmail && (
+      <EmailDetailModal
+        email={selectedEmail}
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setSelectedEmail(null);
+        }}
+      />
+    )}
+    </>
   );
 }
 

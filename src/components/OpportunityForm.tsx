@@ -11,6 +11,7 @@ import { noteService } from '../services/noteService';
 import { taskService } from '../services/taskService';
 import { contactService } from '../services/contactService';
 import { userService } from '../services/userService';
+import { inboundEmailService } from '../services/inboundEmailService';
 import { useAuth } from '../context/AuthContext';
 import DatePicker from './DatePicker';
 import { RichTextEditor } from './RichTextEditor';
@@ -18,6 +19,8 @@ import { NoteContent } from './NoteContent';
 import { SharedUsersManager } from './SharedUsersManager';
 import type { SharedUser } from '../types/account';
 import { canAccessAllData } from '../lib/auth-helpers';
+import EmailDetailModal from './EmailDetailModal';
+import type { InboundEmail } from '../types/inboundEmail';
 
 export default function OpportunityForm() {
   const { id } = useParams();
@@ -46,6 +49,8 @@ export default function OpportunityForm() {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<InboundEmail | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [isCreatingContact, setIsCreatingContact] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -239,13 +244,48 @@ export default function OpportunityForm() {
   };
 
 
-  const handleViewNote = (note: Note) => {
-    if (id) {
-      navigate(`/notes/${note.id}/view`, { 
-        state: { returnPath: `/opportunities/${id}/edit` } 
-      });
+  const handleViewNote = async (note: Note) => {
+    // For email-generated notes, show the corresponding email
+    if (note.source === 'email') {
+      try {
+        console.log(`Looking up email for note ID: ${note.id}, emailId: ${note.emailId || 'not provided'}`);
+        // Use emailId if available (direct lookup), otherwise fall back to reverse lookup
+        const email = await inboundEmailService.getByNoteId(note.id, note.emailId);
+        if (email) {
+          console.log(`Found email: ${email.id}, opening EmailDetailModal`);
+          setSelectedEmail(email);
+          setIsEmailModalOpen(true);
+        } else {
+          console.warn(`No email found for note ID: ${note.id}, falling back to note view`);
+          // Fallback to note view if email not found
+          if (id) {
+            navigate(`/notes/${note.id}/view`, { 
+              state: { returnPath: `/opportunities/${id}/edit` } 
+            });
+          } else {
+            navigate(`/notes/${note.id}/view`);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading email for note:', error);
+        // Fallback to note view on error
+        if (id) {
+          navigate(`/notes/${note.id}/view`, { 
+            state: { returnPath: `/opportunities/${id}/edit` } 
+          });
+        } else {
+          navigate(`/notes/${note.id}/view`);
+        }
+      }
     } else {
-      navigate(`/notes/${note.id}/view`);
+      // Regular notes: navigate to note view
+      if (id) {
+        navigate(`/notes/${note.id}/view`, { 
+          state: { returnPath: `/opportunities/${id}/edit` } 
+        });
+      } else {
+        navigate(`/notes/${note.id}/view`);
+      }
     }
   };
 
@@ -473,6 +513,7 @@ export default function OpportunityForm() {
   };
 
   return (
+    <>
     <div className="p-6">
       <div className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
@@ -647,7 +688,7 @@ export default function OpportunityForm() {
             </div>
           </div>
 
-          {/* Description: Reduced height */}
+          {/* Description: Increased height, decreased font size */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left mb-1">
               Description
@@ -656,8 +697,8 @@ export default function OpportunityForm() {
               id="description"
               value={description} 
               onChange={e => setDescription(e.target.value)} 
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed" 
-              rows={3}
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-sm" 
+              rows={6}
               disabled={loading}
             />
           </div>
@@ -977,80 +1018,71 @@ export default function OpportunityForm() {
                   No tasks found
                 </div>
               ) : (
-                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto overflow-x-auto">
-                  <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0 min-w-[600px]">
-                    <div className="col-span-3">Title</div>
-                    <div className="col-span-2">Status</div>
-                    <div className="col-span-2">Priority</div>
-                    <div className="col-span-2">Due Date</div>
-                    <div className="col-span-3">Description</div>
-                  </div>
-                  <div className="divide-y divide-gray-200 dark:divide-gray-600">
-                    {tasks.map((task) => {
-                      const isExpanded = expandedTasks.has(task.id);
-                      const descIsLong = task.description && task.description.length > 80;
-                      const displayDesc = isExpanded || !descIsLong 
-                        ? (task.description || '-')
-                        : truncateContent(task.description || '', 80);
-                      
-                      return (
-                        <div key={task.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center min-w-[600px]">
-                          <div className="col-span-3">
-                            <span className="text-xs text-gray-900 dark:text-white truncate block">
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {tasks.map((task) => {
+                    const isExpanded = expandedTasks.has(task.id);
+                    const descIsLong = task.description && task.description.length > 200;
+                    const displayDesc = isExpanded || !descIsLong 
+                      ? (task.description || '')
+                      : truncateContent(task.description || '', 200);
+                    
+                    return (
+                      <div key={task.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="text-base font-semibold text-gray-900 dark:text-white mb-2">
                               {task.title}
-                            </span>
-                          </div>
-                          <div className="col-span-2">
-                            <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${
-                              task.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                              task.status === 'in_progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
-                              task.status === 'cancelled' ? 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400' :
-                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                            }`}>
-                              {task.status.replace('_', ' ')}
-                            </span>
-                          </div>
-                          <div className="col-span-2">
-                            <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${
-                              task.priority === 'high' ? 'bg-error-100 text-error-800 dark:bg-error-900/20 dark:text-error-400' :
-                              task.priority === 'medium' ? 'bg-warning-100 text-warning-800 dark:bg-warning-900/20 dark:text-warning-400' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                            }`}>
-                              {task.priority}
-                            </span>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                              {task.dueDate ? formatDate(task.dueDate) : '-'}
-                            </span>
-                          </div>
-                          <div className="col-span-3">
-                            <div className="flex items-center gap-1">
-                              <span className={`text-xs text-gray-700 dark:text-gray-300 ${!isExpanded && descIsLong ? 'truncate' : ''}`}>
-                                {displayDesc}
+                            </div>
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${
+                                task.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                                task.status === 'in_progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
+                                task.status === 'cancelled' ? 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400' :
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                              }`}>
+                                {task.status.replace('_', ' ')}
                               </span>
-                              {descIsLong && (
-                                <button
-                                  onClick={() => {
-                                    const newSet = new Set(expandedTasks);
-                                    if (newSet.has(task.id)) {
-                                      newSet.delete(task.id);
-                                    } else {
-                                      newSet.add(task.id);
-                                    }
-                                    setExpandedTasks(newSet);
-                                  }}
-                                  className="flex-shrink-0 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
-                                >
-                                  {isExpanded ? '▲' : '▼'}
-                                </button>
+                              <span className={`text-xs px-2 py-1 rounded whitespace-nowrap ${
+                                task.priority === 'high' ? 'bg-error-100 text-error-800 dark:bg-error-900/20 dark:text-error-400' :
+                                task.priority === 'medium' ? 'bg-warning-100 text-warning-800 dark:bg-warning-900/20 dark:text-warning-400' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                              }`}>
+                                {task.priority}
+                              </span>
+                              {task.dueDate && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  Due: {formatDate(task.dueDate)}
+                                </span>
                               )}
                             </div>
+                            {task.description && (
+                              <div className="text-sm text-gray-700 dark:text-gray-300">
+                                <div className={`${!isExpanded && descIsLong ? 'line-clamp-2' : ''}`}>
+                                  {displayDesc}
+                                </div>
+                                {descIsLong && (
+                                  <button
+                                    onClick={() => {
+                                      const newSet = new Set(expandedTasks);
+                                      if (newSet.has(task.id)) {
+                                        newSet.delete(task.id);
+                                      } else {
+                                        newSet.add(task.id);
+                                      }
+                                      setExpandedTasks(newSet);
+                                    }}
+                                    className="mt-1 text-xs text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+                                  >
+                                    {isExpanded ? 'Show less' : 'Show more'}
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -1186,45 +1218,51 @@ export default function OpportunityForm() {
                   No contacts found for this account
                 </div>
               ) : (
-                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
-                  <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600 text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky top-0">
-                    <div className="col-span-3">Name</div>
-                    <div className="col-span-3">Email</div>
-                    <div className="col-span-2">Phone</div>
-                    <div className="col-span-2">Title</div>
-                    <div className="col-span-2">Department</div>
-                  </div>
-                  <div className="divide-y divide-gray-200 dark:divide-gray-600">
-                    {contacts.map((contact) => (
-                      <div key={contact.id} className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors items-center">
-                        <div className="col-span-3">
-                          <span className="text-xs text-gray-900 dark:text-white truncate block">
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {contacts.map((contact) => (
+                    <div key={contact.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="text-base font-semibold text-gray-900 dark:text-white mb-1">
                             {contact.firstName} {contact.lastName}
-                          </span>
-                        </div>
-                        <div className="col-span-3">
-                          <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
-                            {contact.email || '-'}
-                          </span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
-                            {contact.phone || contact.mobile || '-'}
-                          </span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
-                            {contact.title || '-'}
-                          </span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-xs text-gray-700 dark:text-gray-300 truncate block">
-                            {contact.department || '-'}
-                          </span>
+                          </div>
+                          {contact.title && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                              {contact.title}
+                              {contact.department && ` • ${contact.department}`}
+                            </div>
+                          )}
+                          <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                            {contact.email && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Email:</span>
+                                <span>{contact.email}</span>
+                              </div>
+                            )}
+                            {(contact.phone || contact.mobile) && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Phone:</span>
+                                <span>{contact.phone || contact.mobile}</span>
+                              </div>
+                            )}
+                            {contact.linkedin && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">LinkedIn:</span>
+                                <a 
+                                  href={contact.linkedin} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 underline"
+                                >
+                                  {contact.linkedin}
+                                </a>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
@@ -1232,6 +1270,19 @@ export default function OpportunityForm() {
         </div>
       </div>
     </div>
+    
+    {/* Email Detail Modal */}
+    {selectedEmail && (
+      <EmailDetailModal
+        email={selectedEmail}
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setSelectedEmail(null);
+        }}
+      />
+    )}
+    </>
   );
 }
 

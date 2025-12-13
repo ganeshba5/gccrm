@@ -7,6 +7,7 @@ export interface Contact {
   email?: string;
   phone?: string;
   mobile?: string;
+  linkedin?: string;                  // LinkedIn profile URL
   title?: string;                     // Job title
   department?: string;
   mailingAddress?: {

@@ -9,6 +9,7 @@ export interface Note {
   isPrivate?: boolean;                 // Private notes (only visible to creator)
   createdBy: string;                  // User UID who created the note
   source?: string;                     // Source of creation (e.g., 'email', 'import', 'manual')
+  emailId?: string;                    // ID of the inbound email if note was created from email
   createdAt: Date;
   updatedAt: Date;
 }

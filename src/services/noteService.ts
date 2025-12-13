@@ -316,6 +316,8 @@ class NoteService {
       opportunityId: data?.opportunityId,
       isPrivate: data?.isPrivate ?? false,
       createdBy: data?.createdBy ?? '',
+      source: data?.source,
+      emailId: data?.emailId,
       createdAt: (data?.createdAt as Timestamp).toDate(),
       updatedAt: (data?.updatedAt as Timestamp).toDate(),
     };
