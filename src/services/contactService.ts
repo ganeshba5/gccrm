@@ -227,6 +227,7 @@ class ContactService {
       email: data?.email,
       phone: data?.phone,
       mobile: data?.mobile,
+      linkedin: data?.linkedin,
       title: data?.title,
       department: data?.department,
       mailingAddress: data?.mailingAddress,

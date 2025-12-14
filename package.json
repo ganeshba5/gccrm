@@ -18,6 +18,7 @@
     "firebase:functions:list": "npx firebase-tools functions:list",
     "script": "ts-node --esm scripts/your-script.ts",
     "import:excel": "tsx scripts/import-excel.ts",
+    "import:demandfactor": "tsx scripts/import-demandfactor-csv.ts",
     "fetch:emails": "tsx scripts/fetch-gmail-emails.ts",
     "test:fetch-emails": "tsx scripts/test-fetch-emails-function.ts",
     "test:process-emails": "tsx scripts/test-process-emails.ts",

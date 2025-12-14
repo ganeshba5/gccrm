@@ -2,10 +2,14 @@
  * Import Accounts, Contacts, and Opportunities from DemandFactor CSV file
  * 
  * Usage:
- *   npx tsx scripts/import-demandfactor-csv.ts [csv-file-path]
+ *   npx tsx scripts/import-demandfactor-csv.ts [csv-file-path] [--update-contacts]
  * 
- * Example:
+ * Options:
+ *   --update-contacts    Update existing contacts with new data from CSV
+ * 
+ * Examples:
  *   npx tsx scripts/import-demandfactor-csv.ts "data/InfoGlobalTech Delivery Report 12.02.2025 DF69125-16LD.csv"
+ *   npx tsx scripts/import-demandfactor-csv.ts "data/file.csv" --update-contacts
  */
 
 import 'dotenv/config';
@@ -158,19 +162,22 @@ async function findOrCreateAccount(
 
 /**
  * Find or create contact
- * Returns { contactId, wasCreated }
+ * Returns { contactId, wasCreated, wasUpdated }
  */
 async function findOrCreateContact(
   firstName: string,
   lastName: string,
   accountId: string,
+  createdBy: string,
+  updateExisting: boolean,
   email?: string,
   phone?: string,
   title?: string,
-  createdBy: string
-): Promise<{ contactId: string; wasCreated: boolean }> {
+  linkedin?: string
+): Promise<{ contactId: string; wasCreated: boolean; wasUpdated: boolean }> {
   try {
     const contactsRef = db.collection('contacts');
+    let existingContactId: string | null = null;
     
     // Try to find existing contact by email (if provided) or by name + account
     if (email) {
@@ -181,20 +188,81 @@ async function findOrCreateContact(
         .get();
       
       if (!emailQuery.empty) {
-        return { contactId: emailQuery.docs[0].id, wasCreated: false };
+        existingContactId = emailQuery.docs[0].id;
       }
     }
     
-    // Try to find by name + account
-    const nameQuery = await contactsRef
-      .where('accountId', '==', accountId)
-      .where('firstName', '==', firstName.trim())
-      .where('lastName', '==', lastName.trim())
-      .limit(1)
-      .get();
+    // Try to find by name + account if not found by email
+    if (!existingContactId) {
+      const nameQuery = await contactsRef
+        .where('accountId', '==', accountId)
+        .where('firstName', '==', firstName.trim())
+        .where('lastName', '==', lastName.trim())
+        .limit(1)
+        .get();
+      
+      if (!nameQuery.empty) {
+        existingContactId = nameQuery.docs[0].id;
+      }
+    }
     
-    if (!nameQuery.empty) {
-      return { contactId: nameQuery.docs[0].id, wasCreated: false };
+    // If contact exists, update fields if updateExisting is true
+    if (existingContactId) {
+      if (updateExisting) {
+        const contactRef = contactsRef.doc(existingContactId);
+        const contactDoc = await contactRef.get();
+        const contactData = contactDoc.data();
+        
+        const updateData: any = {
+          updatedAt: Timestamp.now(),
+        };
+        let hasUpdates = false;
+        
+        // Update email if provided and different
+        if (email && contactData?.email?.toLowerCase() !== email.trim().toLowerCase()) {
+          updateData.email = email.trim();
+          hasUpdates = true;
+        }
+        
+        // Update phone if provided and different
+        if (phone && contactData?.phone !== phone.trim()) {
+          updateData.phone = phone.trim();
+          hasUpdates = true;
+        }
+        
+        // Update title if provided and different
+        if (title && contactData?.title !== title.trim()) {
+          updateData.title = title.trim();
+          hasUpdates = true;
+        }
+        
+        // Update LinkedIn if provided and different
+        if (linkedin && contactData?.linkedin !== linkedin.trim()) {
+          updateData.linkedin = linkedin.trim();
+          hasUpdates = true;
+        }
+        
+        if (hasUpdates) {
+          await contactRef.update(updateData);
+          return { contactId: existingContactId, wasCreated: false, wasUpdated: true };
+        }
+      } else {
+        // If updateExisting is false, only update LinkedIn if provided (backward compatibility)
+        if (linkedin) {
+          const contactRef = contactsRef.doc(existingContactId);
+          const contactDoc = await contactRef.get();
+          const contactData = contactDoc.data();
+          
+          // Update LinkedIn if it's missing or different
+          if (!contactData?.linkedin || contactData.linkedin !== linkedin.trim()) {
+            await contactRef.update({
+              linkedin: linkedin.trim(),
+              updatedAt: Timestamp.now(),
+            });
+          }
+        }
+      }
+      return { contactId: existingContactId, wasCreated: false, wasUpdated: false };
     }
     
     // Contact doesn't exist, create one
@@ -212,9 +280,10 @@ async function findOrCreateContact(
     if (email) contactData.email = email.trim();
     if (phone) contactData.phone = phone.trim();
     if (title) contactData.title = title.trim();
+    if (linkedin) contactData.linkedin = linkedin.trim();
     
     const docRef = await contactsRef.add(contactData);
-    return { contactId: docRef.id, wasCreated: true };
+    return { contactId: docRef.id, wasCreated: true, wasUpdated: false };
   } catch (error: any) {
     console.error(`Error finding/creating contact "${firstName} ${lastName}":`, error.message);
     throw error;
@@ -593,8 +662,12 @@ function getOptionalStringValue(value: any): string | undefined {
   return str || undefined;
 }
 
-async function importDemandFactorCSV(filePath: string) {
+async function importDemandFactorCSV(filePath: string, updateContacts: boolean = false) {
   console.log(`\n📊 Reading CSV file: ${filePath}\n`);
+  
+  if (updateContacts) {
+    console.log('⚠️  Update mode: Existing contacts will be updated with new data from CSV\n');
+  }
   
   // Find shared users
   console.log('👤 Finding shared users...');
@@ -640,6 +713,7 @@ async function importDemandFactorCSV(filePath: string) {
   let accountsCreated = 0;
   let accountsUpdated = 0;
   let contactsCreated = 0;
+  let contactsUpdated = 0;
   let opportunitiesCreated = 0;
   let tasksCreated = 0;
   let notesAdded = 0;
@@ -660,6 +734,7 @@ async function importDemandFactorCSV(filePath: string) {
       const email = getOptionalStringValue(row['Email']);
       const phone = getOptionalStringValue(row['Phone Number']);
       const title = getOptionalStringValue(row['Title']);
+      const linkedin = getOptionalStringValue(row['LinkedIN']);
       const company = getStringValue(row['Company']);
       const industry = getOptionalStringValue(row['Industry']);
       const country = getOptionalStringValue(row['Country']);
@@ -708,13 +783,17 @@ async function importDemandFactorCSV(filePath: string) {
         firstName || 'Unknown',
         lastName || '',
         accountResult.accountId,
+        adminUserId,
+        updateContacts,
         email,
         phone,
         title,
-        adminUserId
+        linkedin
       );
       if (contactResult.wasCreated) {
         contactsCreated++;
+      } else if (contactResult.wasUpdated) {
+        contactsUpdated++;
       }
       
       // Find or create opportunity if budget approved
@@ -773,6 +852,9 @@ async function importDemandFactorCSV(filePath: string) {
   console.log(`   📦 Accounts created: ${accountsCreated}`);
   console.log(`   📦 Accounts found (existing): ${accountsUpdated}`);
   console.log(`   👥 Contacts created: ${contactsCreated}`);
+  if (updateContacts && contactsUpdated > 0) {
+    console.log(`   🔄 Contacts updated: ${contactsUpdated}`);
+  }
   console.log(`   💼 Opportunities created: ${opportunitiesCreated}`);
   console.log(`   ✅ Tasks created: ${tasksCreated}`);
   console.log(`   📝 Notes added: ${notesAdded}`);
@@ -781,14 +863,16 @@ async function importDemandFactorCSV(filePath: string) {
 }
 
 // Main execution
-const filePath = process.argv[2] || join(process.cwd(), 'data', 'InfoGlobalTech Delivery Report 12.02.2025 DF69125-16LD.csv');
+const args = process.argv.slice(2);
+const updateContacts = args.includes('--update-contacts');
+const filePath = args.find(arg => !arg.startsWith('--')) || join(process.cwd(), 'data', 'InfoGlobalTech Delivery Report 12.02.2025 DF69125-16LD.csv');
 
 if (!existsSync(filePath)) {
   console.error(`❌ File not found: ${filePath}`);
   process.exit(1);
 }
 
-importDemandFactorCSV(filePath)
+importDemandFactorCSV(filePath, updateContacts)
   .then(() => {
     console.log('\n✨ Done!\n');
     process.exit(0);
