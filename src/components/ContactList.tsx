@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Contact } from '../types/contact';
 import { contactService } from '../services/contactService';
 import { accountService } from '../services/accountService';
+import { noteService } from '../services/noteService';
 import type { Account } from '../types/account';
 
 export function ContactList() {
@@ -12,6 +13,9 @@ export function ContactList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [contactNotes, setContactNotes] = useState<Map<string, string>>(new Map());
+  const [notesLoading, setNotesLoading] = useState(false);
 
   useEffect(() => {
     loadAccounts();
@@ -25,6 +29,39 @@ export function ContactList() {
       loadContacts();
     }
   }, [selectedAccountId]);
+
+  // Load notes for contacts when search term is present
+  useEffect(() => {
+    if (searchTerm.trim() && contacts.length > 0) {
+      const loadNotesForContacts = async () => {
+        setNotesLoading(true);
+        const notesMap = new Map<string, string>();
+        try {
+          await Promise.all(
+            contacts.map(async (contact) => {
+              try {
+                const notes = await noteService.getByContact(contact.id);
+                const notesContent = notes.map(n => n.content.replace(/<[^>]*>/g, '')).join(' ');
+                if (notesContent) {
+                  notesMap.set(contact.id, notesContent);
+                }
+              } catch (err) {
+                console.error(`Error loading notes for contact ${contact.id}:`, err);
+              }
+            })
+          );
+          setContactNotes(notesMap);
+        } catch (err) {
+          console.error('Error loading notes:', err);
+        } finally {
+          setNotesLoading(false);
+        }
+      };
+      loadNotesForContacts();
+    } else {
+      setContactNotes(new Map());
+    }
+  }, [searchTerm, contacts]);
 
   const loadAccounts = async () => {
     try {
@@ -68,13 +105,58 @@ export function ContactList() {
     return account?.name || accountId;
   };
 
+  // Filter contacts based on search term
+  const filteredContacts = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return contacts;
+    }
+
+    const searchLower = searchTerm.toLowerCase();
+    return contacts.filter((contact) => {
+      // Search in contact name
+      const fullName = `${contact.firstName} ${contact.lastName}`.toLowerCase();
+      if (fullName.includes(searchLower)) return true;
+
+      // Search in title
+      if (contact.title?.toLowerCase().includes(searchLower)) return true;
+
+      // Search in email
+      if (contact.email?.toLowerCase().includes(searchLower)) return true;
+
+      // Search in account name
+      const accountName = getAccountName(contact.accountId).toLowerCase();
+      if (accountName.includes(searchLower)) return true;
+
+      // Search in contact's notes field
+      if (contact.notes?.toLowerCase().includes(searchLower)) return true;
+
+      // Search in related notes content
+      const notesContent = contactNotes.get(contact.id);
+      if (notesContent?.toLowerCase().includes(searchLower)) return true;
+
+      return false;
+    });
+  }, [contacts, searchTerm, contactNotes, accounts]);
+
   if (loading) {
     return <div className="p-4">Loading contacts...</div>;
   }
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-6">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search by name, title, email, account, or notes..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10"
+          />
+          {notesLoading && searchTerm.trim() && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Loading notes...</div>
+          )}
+        </div>
         <select
           value={selectedAccountId}
           onChange={(e) => setSelectedAccountId(e.target.value)}
@@ -101,7 +183,7 @@ export function ContactList() {
 
       {/* Mobile/Tablet Card View */}
       <div className="lg:hidden space-y-4">
-        {contacts.map((contact) => (
+        {filteredContacts.map((contact) => (
           <div key={contact.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 space-y-3">
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
@@ -171,9 +253,9 @@ export function ContactList() {
             </div>
           </div>
         ))}
-        {contacts.length === 0 && (
+        {filteredContacts.length === 0 && (
           <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-            No contacts found
+            {searchTerm.trim() ? 'No contacts match your search' : 'No contacts found'}
           </div>
         )}
       </div>
@@ -193,7 +275,7 @@ export function ContactList() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {contacts.map((contact) => (
+              {filteredContacts.map((contact) => (
                 <tr key={contact.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-4 xl:px-6 py-4 text-left max-w-[150px]">
                     <button
@@ -261,9 +343,9 @@ export function ContactList() {
           </tbody>
         </table>
         </div>
-        {contacts.length === 0 && (
+        {filteredContacts.length === 0 && (
           <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-            No contacts found
+            {searchTerm.trim() ? 'No contacts match your search' : 'No contacts found'}
           </div>
         )}
       </div>
